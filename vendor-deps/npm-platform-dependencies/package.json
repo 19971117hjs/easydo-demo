@@ -1,0 +1,18 @@
+{
+  "name": "npm-platform-dependencies",
+  "version": "0.1.0",
+  "description": "Module to specify dependencies for different operating systems.",
+  "main": "index.js",
+  "bin": {
+    "npmpd": "index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/bertofer/npm-platform-dependencies"
+  },
+  "author": "Alberto Fernandez",
+  "license": "MIT",
+  "dependencies": {
+    "cross-spawn": "^4.0.0"
+  }
+}

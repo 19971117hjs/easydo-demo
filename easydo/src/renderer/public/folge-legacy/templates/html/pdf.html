@@ -1,0 +1,1397 @@
+<!doctype html>
+
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <title>
+    {{#if exportSettings.isPreview}}
+    PDF preview
+    {{else}}
+    {{guide.title}}
+    {{/if}}
+  </title>
+  <link rel="stylesheet" href="{{fullPath}}/assets/spectre.css">
+  </link>
+  <link rel="stylesheet" href="{{fullPath}}/assets/fonts.css">
+  </link>
+  <link rel="stylesheet" href="{{fullPath}}/assets/paper.css">
+  </link>
+  <script src="{{fullPath}}/assets/zepto.js"></script>
+  <script>
+    var exportSettings = {{{ json exportSettings }}};
+    var _stepsData = {{{ json steps 'id,settings'}}};
+    var stepsData = {};
+    var guideData = {{{ json guide }}};
+    /*
+    1 - each step a new page
+    2 - fit as many steps per page, but do not split them
+    3 - just fit all content all together
+    */
+
+    function exportDiagnosticLog(stage, extra) {
+      try {
+        const payload = extra ? JSON.stringify(extra) : '';
+        console.info('[folge-pdf]', stage, payload);
+      } catch (_error) {
+        console.info('[folge-pdf]', stage);
+      }
+    }
+
+    window.addEventListener('error', function (event) {
+      console.error(
+        '[folge-pdf] window-error',
+        JSON.stringify({
+          message: event.message,
+          source: event.filename,
+          line: event.lineno,
+          column: event.colno,
+          stack: event.error && event.error.stack ? String(event.error.stack) : null
+        })
+      );
+    });
+
+    window.addEventListener('unhandledrejection', function (event) {
+      const reason = event.reason;
+      console.error(
+        '[folge-pdf] unhandledrejection',
+        JSON.stringify({
+          message: reason && reason.message ? String(reason.message) : String(reason),
+          stack: reason && reason.stack ? String(reason.stack) : null
+        })
+      );
+    });
+
+    window.onload = (function () {
+      const startedAt = Date.now();
+      exportDiagnosticLog('window.onload:start', {
+        stepCount: Array.isArray(_stepsData) ? _stepsData.length : -1,
+        textPosition: exportSettings.textPosition,
+        pdfStepMode: exportSettings.pdfStepMode,
+        isPreview: !!exportSettings.isPreview
+      });
+
+      try {
+        // Convert steps data from array to an object
+        stepsData = _stepsData.reduce((acc, obj) => {
+          acc[obj.id] = obj;
+          return acc
+        }, {});
+        exportDiagnosticLog('stepsData:ready', { stepCount: Object.keys(stepsData).length });
+
+        adjustDocument();
+        exportDiagnosticLog('adjustDocument:done', { elapsedMs: Date.now() - startedAt });
+
+        constructCoverPage();
+        exportDiagnosticLog('constructCoverPage:done', { elapsedMs: Date.now() - startedAt });
+
+        constructTOS();
+        exportDiagnosticLog('constructTOS:done', { elapsedMs: Date.now() - startedAt });
+
+        constructSteps();
+        exportDiagnosticLog('constructSteps:done', {
+          elapsedMs: Date.now() - startedAt,
+          renderedSheets: $('.sheet').length
+        });
+
+        $('.components').remove();
+        processPageNumberings();
+        processTOCStepNumbers();
+        exportDiagnosticLog('postProcess:done', {
+          elapsedMs: Date.now() - startedAt,
+          renderedSheets: $('.sheet').length
+        });
+
+        if (!exportSettings.isPreview) {
+          var eventEmitInterval = setInterval(function () {
+            document.body.dispatchEvent(new Event('view-ready'))
+          }, 25)
+
+          document.body.addEventListener('view-ready-acknowledged', function () {
+            clearInterval(eventEmitInterval)
+          })
+        }
+
+        exportDiagnosticLog('window.onload:complete', { totalMs: Date.now() - startedAt });
+      } catch (error) {
+        console.error(
+          '[folge-pdf] onload-failed',
+          JSON.stringify({
+            message: String(error && error.message || error),
+            stack: String(error && error.stack || error)
+          })
+        );
+        throw error;
+      }
+    });
+
+    function adjustDocument() {
+      if (exportSettings.pageOrientation == 'landscape') {
+        $('body').addClass('landscape');
+      }
+
+      if (exportSettings.pdfPageSize) {
+        $('body').addClass(exportSettings.pdfPageSize);
+      }
+    }
+    function processTOCStepNumbers() {
+      if (!exportSettings.includeTOS) {
+        return;
+      }
+      const tocItemPageNumbers = $('.tocItemPageNumber');
+      const sheets = $('.sheet');
+      tocItemPageNumbers.each(function () {
+        const tocItemPageNumber = $(this);
+        const stepId = tocItemPageNumber.attr('data-step')
+        sheets.each(function (index) {
+          if ($(this).find('.stepTitle[data-step="' + stepId + '"]').length > 0) {
+            tocItemPageNumber.html(index + 1);
+          }
+        });
+      });
+    }
+    function fitTextToContainer(node) {
+      const currentFontSize = parseFloat(window.getComputedStyle(node).fontSize);
+      let fontSize = currentFontSize;
+
+      while (fontSize > 8) {
+        node.style.fontSize = `${fontSize}px`;
+
+        // Check if text overflows
+        const isOverflowingWidth = node.scrollWidth > node.clientWidth;
+        const isOverflowingHeight = node.scrollHeight > node.clientHeight;
+
+        if (isOverflowingWidth || isOverflowingHeight) {
+          fontSize--;
+        } else {
+          break;
+        }
+      }
+
+      return fontSize;
+    }
+    function processPageNumberings() {
+      const sheets = $('.sheet');
+      let totalPages = sheets.length;
+      sheets.each(function (index) {
+        const numbering = $(this).find('.footerNumbering');
+        if (numbering && numbering.length > 0) {
+          let newcopy = numbering.html();
+          let placeholder = 'Page_Number';
+          newcopy = newcopy.replace(new RegExp(`\\[\\[${placeholder}\\]\\]`, 'ig'), index + 1);
+          placeholder = 'Number_Of_Pages';
+          newcopy = newcopy.replace(new RegExp(`\\[\\[${placeholder}\\]\\]`, 'ig'), totalPages);
+          newcopy = newcopy.replace('\\n', '<br/>')
+          numbering.html(newcopy);
+        }
+
+      })
+    }
+    const editorCoverPageElements = [{
+      type: 'text',
+      id: '',
+      value: 'Hello! <b>Hallo</b>',
+      attributes: {
+
+      },
+      // fontOptions: {},
+      // position: {
+      //   top: '15%',
+      //   left: '15%'
+      // },
+      // dimensions: {
+
+      // },
+      classes: '',
+    },
+    {
+      type: 'coverPage',
+      id: '',
+      backgroundColor: 'gray',
+      bakgroundImage: '',
+      backgroundImageOptions: {}
+    }];
+
+    function normalizeHtmlForPlaceholder(html) {
+      // Create a temporary DOM element to parse the HTML
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = html;
+
+      // Check if the outermost wrapper is a <p> tag
+      if (tempDiv.childNodes.length === 1 && tempDiv.firstChild.tagName === 'P') {
+        // Return the inner HTML of the <p> tag (unwrap it)
+        return tempDiv.firstChild.innerHTML;
+      }
+
+      // If not wrapped in <p>, return the original HTML
+      return html;
+    }
+    function constructCoverPage() {
+      if (!exportSettings.includeCoverPage) {
+        return;
+      }
+      let $components = $('.components');
+      let $coverPage;
+
+      if (exportSettings.useCustomCoverPagePDF) {
+        $coverPage = createNewSection("coverPage no-padding"); // Custom cover page has absolute elements and should not have margins
+        getRoot().append($coverPage);
+        constructCoverPageFromEditor(editorCoverPageTemplate, $coverPage);
+      } else {
+        $coverPage = createNewSection("coverPage");
+        let $component$guideDetailsWrapper = $components.find('.guideDetailsWrapper')
+        getRoot().append($coverPage);
+        $coverPage.append($component$guideDetailsWrapper);
+      }
+
+    }
+
+    const processPlaceholders = (string = '') => {
+      let placeholder = 'Guide_Title';
+      let newcopy = string.replace(new RegExp(`\\[\\[${placeholder}\\]\\]`, 'ig'), exportSettings.placeholdersVault['Guide_Title'] || '');
+      placeholder = 'Guide_CreatedAt';
+      newcopy = newcopy.replace(new RegExp(`\\[\\[${placeholder}\\]\\]`, 'ig'),  exportSettings.placeholdersVault['Guide_CreatedAt'] || '');
+
+      placeholder = 'Guide_UpdatedAt';
+      newcopy = newcopy.replace(new RegExp(`\\[\\[${placeholder}\\]\\]`, 'ig'),  exportSettings.placeholdersVault['Guide_UpdatedAt'] || '');
+
+
+      placeholder = 'Date';
+      newcopy = newcopy.replace(new RegExp(`\\[\\[${placeholder}\\]\\]`, 'ig'),  exportSettings.placeholdersVault['Date'] || '');
+
+
+      placeholder = 'Guide_Description';
+      // newcopy = newcopy.replace(/(?:\r\n|\r|\n)/g, '<br>');
+      newcopy = newcopy.replace(new RegExp(`\\[\\[${placeholder}\\]\\]`, 'ig'), normalizeHtmlForPlaceholder(exportSettings.placeholdersVault['Guide_Description'] || ''));
+
+
+      return newcopy;
+    }
+    const editorCoverPageTemplate = exportSettings.customCoverPagePDFTemplate;
+    // TODO: remove me
+    // function constructCoverPage() {
+    //   if (!exportSettings.includeCoverPage) {
+    //     return;
+    //   }
+    //   let $components = $('.components');
+    //   let $coverPage = createNewSection("coverPage");
+
+    //   getRoot().append($coverPage);
+    //   constructCoverPageFromEditor(editorCoverPageTemplate, $coverPage);
+    //   // let $component$guideDetailsWrapper = $components.find('.guideDetailsWrapper')
+    //   // $coverPage.append($component$guideDetailsWrapper);
+
+    // }
+    function processCoordinates(element) {
+      return {
+        width: element.width + '%',
+        height: element.height + '%',
+        top: element.top + '%',
+        left: element.left + '%'
+      }
+    }
+    function constructCoverPageFromEditor(template, $coverPage) {
+      const canvasOptions = template.canvasOptions || {};
+      const elements = template.elements || [];
+      const $coverPageContainer = $("<div/>", { class: "coverPageContainer" });
+      $coverPage.append($coverPageContainer);
+
+      elements.forEach(element => {
+        let $el;
+        let sanitizedElement = JSON.parse(JSON.stringify(element));
+
+        delete sanitizedElement.content; //content and name might interfere with html props
+        delete sanitizedElement.name;
+
+        if (element.type == 'text') {
+          $el = $("<div/>", { class: 'quillClasses' });
+          let props = {
+            maxWidth: '100%',
+            maxHeight: '100%',
+            position: 'absolute',
+            ...sanitizedElement,  // use sanitized to prevent collisons in html
+            ...processCoordinates(element),
+            borderStyle: element.borderWidth > 0 ? 'solid' : 'none',
+          };
+
+          $el.css(props)
+          $el.html(processPlaceholders(element.content))
+          $coverPageContainer.append($el)
+          if (element.textFit) {
+            fitTextToContainer($el[0])
+          }
+
+        }
+
+        if (element.type == 'image') {
+          const source = exportSettings.assetsVault[element.assetId];
+          if (source) {
+            $el = $("<img/>", { class: 'coverPageImage' });
+            let props = {
+              position: 'absolute',
+              ...sanitizedElement, // use sanitized to prevent collisons in html
+              ...processCoordinates(element),
+              borderStyle: element.borderWidth > 0 ? 'solid' : 'none',
+            };
+            
+
+            $el.css(props)
+            $el.attr({
+              src: source
+            })
+            $coverPageContainer.append($el)
+          }
+
+        }
+
+      });
+      // const coverPageElement = template.find((el) => el.type == 'coverPage');
+      //  const textElements = template.filter((el) => el.type == 'text');
+      if (canvasOptions) {
+        const { backgroundColorEnabled, backgroundColor } = canvasOptions;
+        if (backgroundColorEnabled) {
+          $coverPage.css('background-color', backgroundColor)
+        }
+      }
+      return
+      // const $coverPageContainer = $("<div/>", { class: "coverPageContainer" });
+      // $coverPage.append($coverPageContainer);
+      // textElements.map((textElement) => {
+      //   const $el = $("<div/>", { class: 'quillClasses' });
+      //   $el.css({
+      //     maxWidth: '100%',
+      //     maxHeight: '100%',
+      //     position: 'absolute',
+      //     ...textElement.position,
+      //     ...textElement.dimensions
+      //   })
+      //   $el.html(textElement.value)
+      //   $coverPageContainer.append($el)
+      // })
+    }
+    function constructTOS() {
+      if (!exportSettings.includeTOS || exportSettings.coverPagePreviewMode) {
+        return;
+      }
+      let $components = $('.components');
+      let $tocPage = createNewSection("tocPage");
+      let $component$tocWrapper = $components.find('.tocWrapper')
+      processHeader($tocPage, 0);
+      $tocPage.append($("<div class='tocWrapper'/>"));
+      let $tocWrapper = $tocPage.find('.tocWrapper');
+
+      processFooter($tocPage, 0);
+      getRoot().append($tocPage);
+      let maxHeight = measureSectionInnerAndOuterHeights($tocPage).outerHeightOfCurrentSection;
+
+      $component$tocWrapper.children().each(function () {
+
+        if ($tocWrapper.height() + $(this).height() >= (maxHeight * 0.9)) {
+          $tocPage = createNewSection("tocPage");
+          processHeader($tocPage, 0);
+          $tocPage.append($("<div class='tocWrapper'/>"));
+          $tocWrapper = $tocPage.find('.tocWrapper');
+          processFooter($tocPage, 0);
+          getRoot().append($tocPage);
+          $tocWrapper.append($(this));
+        } else {
+          $tocWrapper.append($(this));
+        }
+
+      });
+    }
+
+    function constructSteps() {
+      let $components$Steps = $('.components .steps .stepsPage');
+      const root = getRoot();
+      $components$Steps.each(function () {
+        let $step = $(this);
+        const stepIndex = $step.data('step');
+        const stepId = $step.data('step-id');
+        const startedAt = Date.now();
+        exportDiagnosticLog('constructSteps:step-start', {
+          stepIndex,
+          stepId,
+          childCount: $step.children().length
+        });
+        try {
+          switch (exportSettings.pdfStepMode) {
+            case 'mode1':
+              processStepInMode1($step, root);
+              break;
+            case 'mode2':
+              processStepInMode2($step, root);
+              break;
+            case 'mode3':
+              processStepInMode3($step, root);
+              break;
+          }
+          exportDiagnosticLog('constructSteps:step-done', {
+            stepIndex,
+            stepId,
+            elapsedMs: Date.now() - startedAt,
+            renderedSheets: $('.sheet').length
+          });
+        } catch (error) {
+          console.error(
+            '[folge-pdf] constructSteps:step-failed',
+            JSON.stringify({
+              stepIndex,
+              stepId,
+              message: String(error && error.message || error),
+              stack: String(error && error.stack || error)
+            })
+          );
+          throw error;
+        }
+      })
+
+      return;
+      /*
+      let totalStepsCount = $components$Steps.length;
+      let $section;
+
+      let finalSource = [];
+      if(exportSettings.oneStepPerPage) { // push array of elements
+        finalSource.push($components$Steps);
+      } else {
+        $components$Steps.each(function() {
+        if($(this).attr('class').indexOf('stepDescription') > -1) {
+          finalSource = finalSource.concat($(this).children());
+        } else {
+          finalSource.push($(this));
+        }
+      });
+      }
+
+      let currentStepIndex = 0;
+      finalSource.forEach(function(stepWrapper, index) {
+        currentStepIndex = $(stepWrapper).data("step") || currentStepIndex; // Because nodes might not have it
+        if(exportSettings.oneStepPerPage) {
+            $section = createNewSection("stepsPage");
+            processHeader($section, currentStepIndex);
+            $section.append($(stepWrapper));
+            processFooter($section, currentStepIndex);
+            getRoot().append($section);
+        } else {
+          if(index == 0) {
+            //kick off with something
+            $section = createNewSection("stepsPage");
+            processHeader($section, currentStepIndex);
+            $section.append($("<div class='stepPageContent'/>"));
+            processFooter($section, currentStepIndex);
+            getRoot().append($section);
+           // $section.append($(stepWrapper));
+          }
+          //Check for header
+          let innerHeightOfCurrentSection = 0;
+          let outerHeightOfCurrentSection = $section.height();
+          outerHeightOfCurrentSection -= outerHeightOfCurrentSection/20;
+          $section.children().each(function(){
+            innerHeightOfCurrentSection += $(this).height();
+          });
+
+          if((innerHeightOfCurrentSection + $(stepWrapper).height()) < outerHeightOfCurrentSection) {
+            //Append
+            $section.find('.stepPageContent').append($(stepWrapper));
+          }else {
+            $section = createNewSection("stepsPage");
+            processHeader($section, currentStepIndex);
+            $section.append($("<div class='stepPageContent'/>"));
+            processFooter($section, currentStepIndex);
+            $section.find('.stepPageContent').append($(stepWrapper));
+            getRoot().append($section);
+          }
+
+        }
+      })
+      */
+    }
+    // Mode3: Just keep as much content as possible
+    function processStepInMode3($step, root) {
+      const stepIndex = $step.data('step');
+      const stepId = $step.data('step-id');
+      let { forceToANewPage } = stepsData[stepId].settings;
+      let lastSection = $('body > section.stepsPage').last();
+      let $section;
+      if (forceToANewPage) {
+        $section = createEmptySectionForStep(root, stepIndex); // Always create a new section
+      } else {
+        $section = lastSection.length > 0 ? lastSection : createEmptySectionForStep(root, stepIndex);
+      }
+
+      let stepChildren = flattenStep($step);
+      stepChildren.forEach(function (node, index) {
+        let $node = $(node);
+        $section = pushNodeInSectionOrCreateNewOne($node, $section, root, stepIndex);
+      });
+
+    }
+    // Mode2: This mode tries to fit as many steps per page, but do not break them.
+    function processStepInMode2($step, root) {
+      const stepIndex = $step.data('step');
+      const stepId = $step.data('step-id');
+      let { forceToANewPage } = stepsData[stepId].settings;
+      let lastSection = $('body > section.stepsPage').last();
+      let $section = lastSection.length > 0 ? lastSection : createEmptySectionForStep(root, stepIndex);
+      // Can we fit the whole step in this section?
+      let {
+        outerHeightOfCurrentSection,
+        innerHeightOfCurrentSection
+      } = measureSectionInnerAndOuterHeights($section);
+
+      const height = $step.children().reduce(function (acc, item) { acc += $(item).height(); return acc; }, 0)
+      let stepChildren = flattenStep($step);
+      // Can we fit the whole step in this section?
+      if (!forceToANewPage && (innerHeightOfCurrentSection + height) < outerHeightOfCurrentSection) {
+        // Go ahead and include them one by one
+        stepChildren.forEach(function (node, index) {
+          let $node = $(node);
+          $section = pushNodeInSectionOrCreateNewOne($node, $section, root, stepIndex);
+        });
+        return;
+      } else {
+        // Okay, we can't fit it. Are there any other children inside current section?
+        if ($section.find('.stepPageContent').children().length > 0) {
+          // there are other elements in this section, meaning we would definitely need a new section
+          // Create it and start adding elements one by one
+          $section = createEmptySectionForStep(root, stepIndex);
+          stepChildren.forEach(function (node, index) {
+            let $node = $(node);
+            $section = pushNodeInSectionOrCreateNewOne($node, $section, root, stepIndex);
+          });
+          return;
+        } else {
+          // Worst case, this is a new section, it has no content in it, and current step is bigger than this section. We just start pushing one by one
+          stepChildren.forEach(function (node, index) {
+            let $node = $(node);
+            $section = pushNodeInSectionOrCreateNewOne($node, $section, root, stepIndex);
+          });
+        }
+      }
+    }
+
+    function measureSectionInnerAndOuterHeights($section) {
+      let outerHeightOfCurrentSection = $section.height();
+      var paddingTop = parseFloat($section.css('padding-top')) || 0;
+      var paddingBottom = parseFloat($section.css('padding-bottom')) || 0;
+      outerHeightOfCurrentSection -= paddingTop;
+      outerHeightOfCurrentSection -= paddingBottom;
+      // outerHeightOfCurrentSection -= outerHeightOfCurrentSection / 10; // 5% for margins, etc
+      let innerHeightOfCurrentSection = 0;
+      $section.children().each(function () {
+        //var marginTop = parseFloat($(this).css('margin-top')) || 0;
+        //var marginBottom = parseFloat($(this).css('margin-bottom')) || 0;
+        innerHeightOfCurrentSection += $(this).height();// + marginTop + marginBottom;
+      });
+
+      return {
+        outerHeightOfCurrentSection,
+        innerHeightOfCurrentSection
+      }
+    }
+    // Mode1:
+    // This mode means that each time method is called, we are supposed to create a new section.
+    // If step is bigger than the whole page, sections will be created
+    // * step - raw node with "sheet padding-scaled stepsPage" but wuthout header and footer
+    function processStepInMode1($step, root) {
+      // First of all, always create a new section
+      const stepIndex = $step.data("step");
+
+      let $section = createEmptySectionForStep(root, stepIndex);
+      let stepChildren = flattenStep($step);
+      stepChildren.forEach(function (node, index) {
+        let $node = $(node);
+        $section = pushNodeInSectionOrCreateNewOne($node, $section, root, stepIndex);
+      });
+
+
+    }
+
+
+    // This node always assumes that node will fit into at least empty page
+    function pushNodeInSectionOrCreateNewOne($node, $section, root, stepIndex) {
+      let {
+        outerHeightOfCurrentSection,
+        innerHeightOfCurrentSection
+      } = measureSectionInnerAndOuterHeights($section);
+
+      // So current node is bigger than section, and section already has some element.
+      // Check for children is done so that if for example node - step image, and it is very big, that we could fit it in current section, and do not create empty one
+      const height = $node.height();
+      const isImage = $node.hasClass('stepImage');
+      if ((innerHeightOfCurrentSection + height) > outerHeightOfCurrentSection && $section.find('.stepPageContent').children().length > 0) {
+        // We need a new section
+        const spaceLeftInSection = outerHeightOfCurrentSection - innerHeightOfCurrentSection; //(innerHeightOfCurrentSection + height) - outerHeightOfCurrentSection;
+        if (isImage && (spaceLeftInSection > height * 0.85)) {
+          // Calculate the space that is left. If in that space we can fit image resized to 90% then proceed.
+          // But we want to fit in image as much as possible, right? 
+          // Okay, one more thing. $node might have margin, paddings. We need to account for that
+          var resizeTo = Math.max($node.find('img').height() * 0.85, spaceLeftInSection * 0.90);
+
+          var paddingTop = parseFloat($node.css('padding-top')) || 0;
+          var paddingBottom = parseFloat($node.css('padding-bottom')) || 0;
+          var marginTop = parseFloat($node.css('margin-top')) || 0;
+          var marginBottom = parseFloat($node.css('margin-bottom')) || 0;
+
+          resizeTo -= paddingTop;
+          resizeTo -= paddingBottom;
+          resizeTo -= marginTop;
+          resizeTo -= marginBottom;
+
+          $node.find('img').height(resizeTo); // $node.find('img').height()
+        } else {
+          $section = createEmptySectionForStep(root, stepIndex);
+        }
+
+      }
+
+      $section.find('.stepPageContent').append($node);
+
+      return $section;
+      //
+    }
+    function flattenStep($step) {
+      let finalArray = [];
+      $step.children().each(function () {
+        const isStepDesc = $(this).hasClass('stepDescription');
+        const isMultiSub = $(this).hasClass('multiImageSubstepDescription');
+        if (isStepDesc || isMultiSub) {
+          var children = $(this).children().toArray()
+          /// Usually inside description there is atleast <p> tag, but if there is not, we create one and put content into it
+          if (children.length == 0) {
+            const newP = document.createElement("p");
+            newP.append($(this).html())
+            children = [newP];
+          }
+          children = children.map((child) => {
+            if(isStepDesc) {
+              $(child).addClass('stepDescription');
+            }
+            if(isMultiSub) {
+              $(child).addClass('multiImageSubstepDescription');
+            }
+            return child;
+          })
+          finalArray = finalArray.concat(children);
+        } else {
+          finalArray.push($(this));
+        }
+      });
+      return finalArray;
+    }
+
+    function createEmptySectionForStep(root, stepIndex) {
+      $section = createNewSection("stepsPage");
+      processHeader($section, stepIndex);
+      $section.append($("<div class='stepPageContent quillClasses'/>"));
+      processFooter($section, stepIndex);
+      root.append($section);
+      return $section;
+    }
+
+    function processHeader(spotToInclude, index) {
+      if (!exportSettings.includeHeader) {
+        return;
+      }
+      let $components$header = $('.components .header');
+      let h = $components$header.clone();
+      h.find('.headerText').html(exportSettings.preparsed.headers[index]);
+      spotToInclude.append(h);
+    }
+
+    function processFooter(spotToInclude, index) {
+      if (!exportSettings.includeFooter) {
+        return;
+      }
+      let $components$footer = $('.components .footer');
+      let h = $components$footer.clone();
+      h.find('.footerText').html(exportSettings.preparsed.footers[index]);
+      h.find('.footerNumbering').html(exportSettings.preparsed.numberings[index]);
+      spotToInclude.append(h);
+    }
+
+    function createNewSection(extraClass) {
+      return $("<section/>", { class: "sheet padding-scaled " + extraClass });
+    }
+
+    function getRoot() {
+      return $('body');
+    }
+  </script>
+  <style>
+
+    /* Fixing headlines from spectre */
+    h1.stepDescription,
+    .h1 {
+      font-size: 1.8rem;
+    }
+    h2.stepDescription,
+    .h2 {
+      font-size: 1.6rem;
+    }
+    h3.stepDescription,
+    .h3 {
+      font-size: 1.4rem;
+    }
+    h4.stepDescription,
+    .h4 {
+      font-size: 1.2rem;
+    }
+    h5.stepDescription,
+    .h5 {
+      font-size: 1.0rem;
+    }
+    h6.stepDescription,
+    .h6 {
+      font-size: .8rem;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-bottom: .3em;
+    }
+
+
+/* Base styles for lists */
+ul, ol {
+    padding-left: 1.5em;
+    margin-bottom: 0.8rem;
+}
+
+/* List item styling */
+li {
+    margin-bottom: 0.1em !important;
+    margin-top: 0.1em !important;
+    position: relative;
+    padding-left: 0.5em;
+}
+/* Create a hanging indent effect */
+li::before {
+    content: "";
+    display: inline-block;
+    width: 1.5em; /* Adjust as needed */
+    margin-left: -1.5em;
+}
+/* Nested list styles */
+li > ul, 
+li > ol {
+    margin-top: 0.1em;
+    margin-bottom: 0.1em;
+}
+
+/* Ordered list styling */
+ol {
+    list-style-type: decimal;
+    list-style-position: outside;
+}
+
+/* Unordered list styling */
+ul {
+    list-style-type: disc;
+    list-style-position: outside;
+}
+
+/* Second level ordered list */
+ol > li > ol {
+    list-style-type: disc;
+}
+
+
+ol > li > ol > li > ol {
+    list-style-type: lower-roman;
+}
+
+ol > li > ol > li > ol > li > ol {
+    list-style-type: decimal;
+}
+
+/* Nested levels for unordered lists */
+ul ul {
+    list-style-type: disc;
+}
+
+ul ul ul {
+    list-style-type: square;
+}
+
+ul ul ul ul {
+    list-style-type: disc;
+}
+
+/* Reset text-indent for deeper nested lists */
+ol > li > ol > li,
+ul > li > ul > li,
+ol > li > ol > li > ol > li,
+ul > li > ul > li > ul > li {
+    text-indent: 0;
+    padding-left: 0;
+}
+
+
+/* Quill indentation classes */
+.ql-indent-1 { padding-left: 1.5em; }
+.ql-indent-2 { padding-left: 3em; }
+.ql-indent-3 { padding-left: 4.5em; }
+.ql-indent-4 { padding-left: 6em; }
+.ql-indent-5 { padding-left: 7.5em; }
+.ql-indent-6 { padding-left: 9em; }
+.ql-indent-7 { padding-left: 21em; }
+.ql-indent-8 { padding-left: 24em; }
+.ql-indent-9 { padding-left: 27em; }
+
+/* Adjust list item styles when using Quill indentation */
+li.ql-indent-1, li.ql-indent-2, li.ql-indent-3,
+li.ql-indent-4, li.ql-indent-5, li.ql-indent-6,
+li.ql-indent-7, li.ql-indent-8, li.ql-indent-9 {
+    padding-left: 0;
+    text-indent: 0;
+}
+
+/* Ensure proper bullet/number placement for indented list items */
+ul.ql-indent-1, ol.ql-indent-1 { padding-left: 4.5em; }
+ul.ql-indent-2, ol.ql-indent-2 { padding-left: 7.5em; }
+ul.ql-indent-3, ol.ql-indent-3 { padding-left: 10.5em; }
+ul.ql-indent-4, ol.ql-indent-4 { padding-left: 13.5em; }
+ul.ql-indent-5, ol.ql-indent-5 { padding-left: 16.5em; }
+ul.ql-indent-6, ol.ql-indent-6 { padding-left: 19.5em; }
+ul.ql-indent-7, ol.ql-indent-7 { padding-left: 22.5em; }
+ul.ql-indent-8, ol.ql-indent-8 { padding-left: 25.5em; }
+ul.ql-indent-9, ol.ql-indent-9 { padding-left: 28.5em; }
+
+    .coverPage {
+      display: flex;
+      align-items: center;
+    }
+
+
+    .components {
+      visibility: hidden;
+      position: absolute;
+    }
+
+    /* html, body {
+      height: 100%;
+      width: 100%;
+    } */
+    body {
+      font-family: 'Roboto', sans-serif;
+      font-size: 18px;
+      -webkit-print-color-adjust: exact !important;
+      {{#if exportSettings.isPreview}}
+      -webkit-user-select: none; /* Safari */
+      -ms-user-select: none; /* IE 10 and IE 11 */
+      user-select: none; /* Standard syntax */
+      {{/if}}
+    }
+
+    /* @page {
+      margin-top: 0.2in;
+      margin-bottom: 0.2in;
+      margin-left: 0;
+      margin-right: 0;  
+    }  */
+    /* @media print { */
+    /* .page {
+        display: inline-block;
+        clear: both;
+        margin: 10mm;
+        page-break-after: always;
+      }*/
+    /* } */
+    /* .coverPage {
+      position:absolute;
+      top:50%;
+      margin:auto;
+      height: auto;
+    } */
+    .coverPageBlock {
+      margin-top: 50%;
+      margin-left: 3%;
+    }
+
+    .coverPageBlock .title {
+      margin: 0 auto;
+      font-weight: 700;
+      font-size: 200%;
+    }
+
+    .coverPageBlock .description {
+      margin-top: 5%;
+      font-size: 125%;
+    }
+
+    .tableOfContentTitle {
+      font-size: 150%;
+    }
+
+    .tableOfContentStep {
+      font-size: 75%;
+    }
+
+    /* .stepTitle {
+      font-size: 150%;
+      margin-bottom: 10px;
+    } */
+    /* .stepDescription {
+      margin-bottom: 10px;
+    }
+    .stepDescription p{
+      margin: 0 0 0.8rem;
+    } */
+    .stepImage img {
+      max-height: 215mm;
+      width: auto;
+    }
+
+    .landscape .stepImage img {
+      max-height: 150mm;
+      width: auto;
+    }
+
+    .coverPageContainer {
+      margin-top: 0mm;
+      margin-bottom: 3mm;
+      width: 100%;
+      height: 100%;
+      position: relative;
+      line-height: normal;
+    }
+    .guideDetailsWrapper {
+      margin-top: 0mm;
+      margin-bottom: 3mm;
+      width: 100%;
+      /* border-bottom: 2px solid #eee; */
+    }
+    .guideDetailsWrapper .description {
+      {{{unfoldStyleSettings exportSettings.fontsAndColors.guideDescription}}}
+    }
+    .guideDetailsWrapper .description p, .coverPageContainer p {
+      margin: 0.5rem 0;
+    }
+    .guideDetailsWrapper .title {
+      margin-bottom: .3em;
+      {{{unfoldStyleSettings exportSettings.fontsAndColors.guideTitle}}}
+    }
+
+    .tocWrapper .tocTitle{
+      margin: .5em 0;
+      {{{unfoldStyleSettings exportSettings.fontsAndColors.tocTitle}}}
+    }
+    {{#if exportSettings.fontsAndColors.tocItem.underline}}
+      .tocWrapper .tocItem {
+        border-bottom: 1px dashed {{{getKeyFromObject exportSettings.fontsAndColors.tocItem 'color'}}};
+      }
+    {{/if}}
+    .tocWrapper .tocItem .link {
+      text-decoration: none;
+      {{{unfoldStyleSettings exportSettings.fontsAndColors.tocItem}}}
+    }
+
+    .tocWrapper .tocItem.nested {
+      margin-left: 1rem;
+    }
+
+    .tocWrapper .tocItem.nested-1 {
+      margin-left: 1rem;
+    }
+
+    .tocWrapper .tocItem.nested-2 {
+      margin-left: 2rem;
+    }
+
+    .tocWrapper .tocItem.nested-3 {
+      margin-left: 3rem;
+    }
+
+    .tocWrapper .tocItem.nested-4 {
+      margin-left: 4rem;
+    }
+
+    .tocWrapper .tocItem.nested-5 {
+      margin-left: 5rem;
+    }
+
+    .tocWrapper .tocItem.nested-6 {
+      margin-left: 6rem;
+    }
+
+    .tocWrapper .tocItem .tocItemPageNumber {
+      text-decoration: none;
+      float: right;
+      {{{unfoldStyleSettings exportSettings.fontsAndColors.tocItem}}}
+    }
+
+    .multiImageSubstepTitle {
+      text-align: center;
+      {{{unfoldStyleSettings exportSettings.fontsAndColors.subStepTitle}}}
+    }
+    .multiImageSubstepDescription {
+      {{{unfoldStyleSettings exportSettings.fontsAndColors.subStepDescription}}}
+    }
+    .stepTitle {
+      margin: 1em 0;
+      display: flex;
+      border: 1px solid {{exportSettings.fontsAndColors.stepTitleBorderColor.color}};
+      padding: 0.8rem;
+      border-top-left-radius: 0.75rem;
+      border-top-right-radius: 0.75rem;
+      background-color: {{exportSettings.fontsAndColors.stepTitleBackground.color}};
+      {{{unfoldStyleSettings exportSettings.fontsAndColors.stepTitle}}}
+    }
+    /* For now Content block should output just a title*/
+    .contentBlockTitle {
+      margin: 0.5em 0;
+      {{{unfoldStyleSettings exportSettings.fontsAndColors.stepTitle}}}
+    }
+
+    .stepTitle:empty {
+      visibility: none;
+    }
+
+    .stepTitleIndex {
+      background: #fff;
+      height: fit-content;
+      border: 1px solid {{exportSettings.fontsAndColors.stepTitleBorderColor.color}};
+      padding: 0 1.5%;
+      text-align: center;
+      border-radius: 0.5rem;
+      margin-right: 2%;
+    }
+    
+    .stepTitleText {
+      word-break: break-word;
+    }
+
+    .stepTitle:empty {
+      display: none;
+    }
+
+    .stepDescription {
+      {{{unfoldStyleSettings exportSettings.fontsAndColors.stepDescription}}}
+    }
+
+    .stepsPage {
+      font-size: 0.8em;
+    }
+
+    .stepsPage p {
+      margin: 0;
+    }
+
+    .stepImage {
+      margin: 0.6rem 0;
+
+      text-align: {{exportSettings.imageAlign}};
+    }
+
+    .tocPage,
+    .stepsPage {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .header {
+      display: block;
+      border-bottom: 2px solid #c1c1c1;
+      padding-bottom: 0.3em;
+      margin-bottom: 0.5em;
+      {{{unfoldStyleSettings exportSettings.fontsAndColors.headerText}}}
+    }
+    .footer {
+      display: block;
+      margin-top: auto;
+      border-top: 2px solid #c1c1c1;
+      padding-top: 0.5em;
+      {{{unfoldStyleSettings exportSettings.fontsAndColors.footerText}}}
+    }
+
+    .footerLogo,
+    .headerLogo {
+      max-height: 50px;
+      display: unset !important;
+    }
+
+    .footer .column,
+    .header .column {
+      margin: auto 0;
+    }
+
+    .footerNumbering {
+      overflow-wrap: break-word;
+    }
+
+    {{#if exportSettings.showPreviewBanner}}
+
+    .previewBanner {
+      display: block;
+      width: 100%;
+      padding: 10px;
+      background-color: rgb(255, 196, 35);
+      color: black;
+      text-align: center;
+      font-size: 100%;
+      position: fixed;
+      z-index: 10;
+
+    }
+
+    .imagePreview {
+      color: black;
+      vertical-align: middle;
+      background-color: #f6f6f9;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      max-height: 215mm;
+      width: auto;
+    }
+
+    .landscape .imagePreview {
+      max-height: 150mm;
+      width: auto;
+    }
+
+    {{/if}}
+
+
+    iframe {
+      display: none !important;
+    }
+
+    /* Electron wont print */
+    {{textblockcss}}
+    {{{exportSettings.customCSS}}}
+  </style>
+</head>
+
+<body>
+  {{#if exportSettings.showPreviewBanner}}
+  <div class="previewBanner">
+    This is a preview of the final PDF. Only first {{{exportSettings.previewSteps}}} steps (go to Settings ->
+    Application to change this) are rendered for the sake of speed. <br />Final document will include all steps.
+  </div>
+  {{/if}}
+  <div class="components">
+    <div class="header">
+      {{#if exportSettings.headerLogo}}
+      {{#ifEquals exportSettings.headerLogoAlign 'center'}}
+      <div class="columns">
+        <div class="column col-12 text-center"><img class="headerLogo img-responsive"
+            src="{{exportSettings.headerLogoDetails.imageBuffer}}" /></div>
+      </div>
+      <div class="columns">
+        <div class="column col-12 text-center">
+          <div class="headerText"></div>
+        </div>
+      </div>
+      {{/ifEquals}}
+      {{#ifEquals exportSettings.headerLogoAlign 'left'}}
+      <div class="columns">
+        <div class="column col-2 text-left"><img class="headerLogo img-responsive"
+            src="{{exportSettings.headerLogoDetails.imageBuffer}}" /></div>
+        <div class="column col-10 text-center">
+          <div class="headerText"></div>
+        </div>
+      </div>
+      {{/ifEquals}}
+      {{#ifEquals exportSettings.headerLogoAlign 'right'}}
+      <div class="columns">
+        <div class="column col-0 text-center">
+          <div class="headerText"></div>
+        </div>
+        <div class="column col-2 text-right"><img class="headerLogo img-responsive"
+            src="{{exportSettings.headerLogoDetails.imageBuffer}}" /></div>
+      </div>
+      {{/ifEquals}}
+      {{else}}
+      <div class="columns">
+        <div class="column col-1">&nbsp;</div>
+        <div class="column col-10 text-center">
+          <div class="headerText"></div>
+        </div>
+        <div class="column col-1">&nbsp;</div>
+      </div>
+      {{/if}}
+    </div>
+
+    <div class="footer">
+      {{#if exportSettings.footerLogo}}
+      {{#ifEquals exportSettings.footerLogoAlign 'center'}}
+      <div class="columns">
+        <div class="column col-5 text-left">
+          <div class="footerText"></div>
+        </div>
+        <div class="column col-2 text-center"><img class="footerLogo img-responsive"
+            src="{{exportSettings.footerLogoDetails.imageBuffer}}" /></div>
+        <div class="column col-5 text-right">
+          <div class="footerNumbering"></div>
+        </div>
+      </div>
+      {{/ifEquals}}
+      {{#ifEquals exportSettings.footerLogoAlign 'left'}}
+      <div class="columns">
+        <div class="column col-2 text-left"><img class="footerLogo img-responsive"
+            src="{{exportSettings.footerLogoDetails.imageBuffer}}" /></div>
+        <div class="column col-8 text-center">
+          <div class="footerText"></div>
+        </div>
+        <div class="column col-2 text-right">
+          <div class="footerNumbering"></div>
+        </div>
+      </div>
+      {{/ifEquals}}
+      {{else}}
+      <div class="columns">
+        <div class="column col-10 text-left">
+          <div class="footerText"></div>
+        </div>
+        <div class="column col-2 text-right">
+          <div class="footerNumbering"></div>
+        </div>
+      </div>
+      {{/if}}
+    </div>
+
+
+    <div class="guideDetailsWrapper">
+      <h2 class="title">{{guide.title}}</h2>
+      {{#if guide.description}}
+      <div class="description quillClasses">
+        {{{guide.description}}}
+      </div>
+      {{/if}}
+    </div>
+
+    <div class="tocWrapper">
+      <h3 class="tocTitle">{{exportSettings.tocHeadline}}</h3>
+      {{#each steps}}
+        {{#if this.includeInToc}}
+          {{#unless (and (defineInline this.parentId) (ifEqualsInline ../exportSettings.includeTOCSubSteps false) ) }}
+          <div class="tocItem {{#if this.nested}}nested-{{this.nested}}{{/if}}">
+            <a href="#step-{{this.id}}" class="link">
+              {{~#if ../exportSettings.includeNumbers~}}
+              {{striplastchar this.indexString}}&nbsp;
+              {{~/if~}}
+              {{~this.title~}}&nbsp;
+            </a>
+            
+              <span class="tocItemPageNumber" data-step="{{@index}}"></span>
+
+          </div>
+          {{/unless}}
+
+        {{/if}}
+      {{/each}}
+    </div>
+
+    {{#*inline "textBlock"}}
+    <div class="stepTextBlock {{this.type}}">
+      <div class="stepTextBlockIcon">
+        {{{this.icon}}}
+      </div>
+      <div class="stepTextBlockContent">
+        {{#if this.title}}
+        <div class="stepTextBlockTitle">{{this.title}}</div>
+        {{/if}}
+        {{#if this.description}}
+        <div class="stepTextBlockDescription">{{{this.description}}}</div>
+        {{/if}}
+      </div>
+    </div>
+    {{/inline}}
+
+
+    <div class="steps">
+      {{#each steps}}
+      <div class="sheet padding-scaled stepsPage" data-step="{{@index}}" data-step-id="{{this.id}}">
+        {{#each (picktextblocks this.textblocks 'before-title')}}
+          {{> textBlock this}}
+        {{/each}}
+        {{!-- Content Block only has title and it is shown when title is defined --}}
+
+        {{#if this.contentBlock}}
+          {{~#if this.title}}
+            <div class="contentBlockTitle">{{~this.title~}}</div>
+          {{~/if~}}
+        {{else}}
+          <div class="stepTitle" id="step-{{this.id}}" data-step="{{@index}}" data-step-id="{{this.id}}">
+            {{~#if ../exportSettings.includeNumbers~}}
+              <div class="stepTitleIndex">{{~striplastchar this.indexString~}}</div>
+            {{~/if~}}
+            {{~#if this.title}}
+              <div class="stepTitleText">{{~this.title~}}</div>
+            {{~/if~}}
+          </div>
+        {{/if}}
+
+        {{#each (picktextblocks this.textblocks 'after-title')}}
+          {{> textBlock this}}
+        {{/each}}
+
+        {{#*inline "descriptionPartial"}}
+          {{#each (picktextblocks this.textblocks 'before-description')}}
+            {{> textBlock this}}
+          {{/each}}
+            {{#if this.description}}
+              <div class="stepDescription" data-step="{{@index}}">{{{this.description}}}</div>
+            {{/if}}
+          {{#each (picktextblocks this.textblocks 'after-description')}}
+            {{> textBlock this}}
+          {{/each}}
+        {{/inline}}
+
+        {{#ifEquals ../exportSettings.textPosition 'top'}}
+          {{> descriptionPartial}}
+        {{/ifEquals}}
+        
+        {{#each (picktextblocks this.textblocks 'before-image')}}
+          {{> textBlock this}}
+        {{/each}}
+
+        {{#*inline "stepImage"}}
+
+          {{#if this.path}}
+            <div class="stepImage">
+              <img src="./{{../pathToSteps}}/{{this.path}}" width="{{this.width}}px" height="{{this.height}}px" />
+            </div>
+          {{/if}}
+        {{/inline}}
+
+        {{> stepImage this}}
+
+        {{#if this.multiImageSubSteps}}
+            {{#each this.multiImageSubSteps}}
+              {{#each ../this.settings.substepBlocksSettings}}
+                {{#if this.show}}
+                  {{#ifEquals this.id 'title'}}
+                    {{#if ../this.title}}
+                      <div class="multiImageSubstepTitle">{{../this.title}}</div>
+                    {{/if}}
+                  {{/ifEquals}}
+
+                  {{#ifEquals this.id 'description'}}
+                    {{#if ../this.description}}
+                      <div class="multiImageSubstepDescription">{{{../this.description}}}</div>
+                    {{/if}}
+                  {{/ifEquals}}
+
+                  {{#ifEquals this.id 'image'}}
+                    {{> stepImage ../this}}
+                  {{/ifEquals}}
+               {{/if}}
+            {{/each}}
+          {{/each}}
+        {{/if}}
+        {{#each (picktextblocks this.textblocks 'after-image')}}
+          {{> textBlock this}}
+        {{/each}}
+
+        {{#ifEquals ../exportSettings.textPosition 'bottom'}}
+          {{> descriptionPartial}}
+        {{/ifEquals}}
+      </div>
+      {{/each}}
+    </div>
+  </div>
+</body>
+
+</html>

@@ -1,0 +1,449 @@
+<!doctype html>
+
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <title>{{guide.title}}</title>
+  {{{embedAsset 'spectre.css' pathToSteps exportSettings}}}
+
+  {{#if exportSettings.includeTOS}}
+  {{{embedAsset 'toc.css' pathToSteps exportSettings}}}
+  {{{embedAsset 'common.css' pathToSteps exportSettings}}}
+  {{{embedAsset 'toc.js' pathToSteps exportSettings}}}
+  {{/if}}
+
+  <style>
+    .fullyHide {
+      display: none !important;
+    }
+    .bg {
+      background-color: #eff0f3;
+    }
+    .headline {
+      color: #0d0d0d;
+    }
+    .topSection {
+      padding: 50px .5rem;
+    }
+    .card {
+      border: 0;
+      box-shadow: 0 0.25rem 1rem rgba(48,55,66,.15);
+      height: 100%;
+      margin-bottom: 3.5rem;
+    }
+    .headerLogo {
+      top: 20px;
+      right: 20px;
+      float: right;
+      z-index: 10;
+      position: fixed;
+      padding: 10px;
+      box-shadow: 0 0.25rem 1rem rgba(48,55,66,.15);
+      background-color: white;
+      cursor: pointer;
+    }
+    .headerLogo a img{
+      border: 0;
+    }
+    .card-header {
+      display: flex;
+    }
+    .card-header, .card-body {
+      padding-left: 2rem !important;
+    }
+    .card-image {
+      text-align: {{exportSettings.imageAlign}};
+      padding: 0.5rem;
+    }
+    .card-image img{
+      box-shadow: 0 0.25rem 1rem rgba(48,55,66,.15);
+      /* max-width: 750px; */
+      margin: 0.7rem auto;
+      display: unset !important;
+    }
+    {{#if exportSettings.includeTOS}}
+    .toc, .tocFake {
+      z-index: 10;
+      position: fixed;
+      top: 60px;
+      left: 15px;
+      max-width: 250px;
+      padding: 10px;
+      box-shadow: 0 0.25rem 1rem rgba(48,55,66,.15);
+      background-color: white;
+      overflow: auto;
+      max-height: calc(80vh);
+    }
+    .tocFake {
+      cursor: pointer;
+      top: 20px;
+    }
+    @media (max-width:1350px){
+      .toc {
+        max-width: 200px;
+      }
+    }
+    @media (max-width:1150px){
+      .headerLogo {
+        display: none;
+      }
+    }
+    .headline:focus, .headline:hover {
+      outline : none !important;
+    }
+    .toc-link::before{
+      width:5px;
+    }
+    .is-active-link::before{
+      background-color: rgba(255,196,35,1);
+    }
+    .toc-link {
+      font-size: 0.8em;
+    }
+    .doubleCheesburger {
+      width: 12px;
+      height: 12px;
+      background-size: contain;
+      background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAABmJLR0QA/wD/AP+gvaeTAAAAw0lEQVR4nO3YMQ7CMAxG4Qc74gJlRL07qjgBV+rQXCAMHUBRhiAKSdv3SV482R48/CBJkiRJLxdgAAIQV14BuAP9J8uPDQy+dI1AV3KAoYFhf1W3dNlD5gABOJVcaoUCcH5vHCsNUktMG7kDPP4wSC1Fu/Vs9wleSy/VMT+MqYHBv62J+bEXLy9JkvbNPKCBwZcu8wDMA8wDYtowD8gwD8A8QJIk7Zh5QAODL13mAZgHmAfEtGEekGEegHmAJEmSpI17AhoPKkbYwzDbAAAAAElFTkSuQmCC);
+    }
+    {{/if}}
+    .form-checkbox {
+      display: inline;
+      margin: 0;
+      margin-right: 5px;
+    }
+    input[type="checkbox"], .form-icon {
+      transform:scale(1.5, 1.5);
+    }
+    .stepCard {
+      padding-bottom: 1.5rem;
+      padding-top: 0.5rem;
+    }
+    .stepTitle {
+      display:inline-block;
+    }
+    .substepTitle {
+      font-weight: 600;
+      text-align: center;
+      margin: .8rem 0;
+    }
+
+    .card {
+      border: 2px solid transparent;
+    }
+    .completedCard {
+      border: 2px solid #2a9a39;
+      box-shadow: 0 0.25rem 1rem rgb(43 154 56 / 0.45);
+    }
+
+    .form-checkbox input:checked+.form-icon,
+    .form-radio input:checked+.form-icon,
+    .form-switch input:checked+.form-icon {
+      background: #00c400;
+      border-color: #00c400
+    }
+
+    .form-checkbox input:focus+.form-icon,
+    .form-radio input:focus+.form-icon,
+    .form-switch input:focus+.form-icon {
+      border-color: #00c400;
+      box-shadow: 0 0.25rem 1rem rgb(43 154 56 / 0.2);
+    }
+
+    .form-checkbox input:indeterminate+.form-icon {
+      background: #00c400;
+      border-color: #00c400
+    }
+    .form-checkbox.bottom {
+      margin-bottom: 15px;
+      margin-left: auto;
+      margin-right: 10px;
+      margin-top: 5px;
+    }
+    @media (max-width:992px){
+      p {margin:0}
+      blockquote {margin:0}
+      .container.grid-md {max-width:1296px}
+      .card {margin-bottom:1rem}
+      .col-xs-10,.col-md-10,.col-xl-10 {width:100%}
+    }
+
+    {{textblockcss}}
+
+    .stepTextBlock {
+      margin-left: 5%;
+      margin-right: 5%;
+    }
+
+    {{{exportSettings.customCSS}}}
+  </style>
+
+  <script>
+    function initializeToc() {
+      if(typeof tocbot == 'undefined')  {
+        return;
+      }
+      
+      var tocFake = document.getElementsByClassName('tocFake')[0]
+      var tocReal = document.getElementsByClassName('toc')[0];
+
+      /* If js works, then we remove nonJc TOC, show both real and fake tocs
+      */
+      var tocNonJs = document.getElementsByClassName('tocNonJs')[0];
+      tocNonJs.style.display = 'none';
+      tocFake.classList.remove("fullyHide");
+      tocReal.classList.remove("fullyHide");
+
+
+      tocbot.init({
+        // Where to render the table of contents.
+        tocSelector: '.toc',
+        positionFixedSelector: '.toc',
+        // Where to grab the headings to build the table of contents.
+        contentSelector: '.section',
+        // Which headings to grab inside of the contentSelector element.
+        headingSelector: '.headline',
+        ignoreSelector: '.substep',
+        onClick: function(e) {
+          // After user clicks ToC item, refresh tocbot to properly highlight active item
+          setTimeout(() => {
+            tocbot.refresh();
+          }, 50)
+        },
+        headingsOffset: 5,
+        headingLabelCallback: function(heading, node) {
+          var ancestor = findAncestor(node, 'card');
+          var isCompleted = ancestor && (findAncestor(node, 'card').classList.contains('completedCard'));
+          return (isCompleted ? '✅ ' : '') + heading.trim();
+        }
+      });
+      tocFake.addEventListener('click', function() {
+        toggleClassName(tocFake, 'show-md');
+        toggleClassName(tocReal, 'hide-md');
+      })
+
+    }
+    var exportSettings = {{{json exportSettings}}};
+
+    window.onload = function() {
+      {{#if exportSettings.includeTOS}}
+        initializeToc()
+      {{/if}}
+
+      {{#if exportSettings.includeCheckboxes}}
+      var nodes = document.getElementsByClassName('completionCheckbox')
+      var checkboxes = Array.prototype.slice.call(nodes);
+      checkboxes.forEach(checkboxListener)
+      {{/if}}
+    }
+    function toggleClassName(element, className) {
+      element.classList.toggle(className);
+    }
+    var scrollTo = (element) => {
+      window.scroll({
+        behavior: 'smooth',
+        left: 0,
+        top: element.offsetTop
+      });
+    }
+    function checkboxListener(checkbox) {
+      checkbox.addEventListener('change', function(event) {
+        var stepId = event.target.getAttribute('data-step-id');
+        var stepIdParts = stepId.split('-');
+        var isChecked = event.target.checked
+        var cardNode = document.querySelector('.card[data-step-id="'+stepId+'"]');
+        cardNode.classList.toggle('completedCard');
+        
+        if(isChecked) {
+          var nextId = parseInt(stepIdParts[1]) + 1;
+          var nextCardNode = document.querySelector('.card[data-step-id="step-'+nextId+'"]');
+          if(nextCardNode) {
+            scrollTo(nextCardNode);
+          }
+        }
+        tocbot.refresh();
+      })
+    }
+    function findAncestor (el, cls) {
+        while ((el = el && el.parentElement) && !el.classList.contains(cls));
+        return el;
+    }
+  </script>
+
+</head>
+
+{{#*inline "textBlock"}}
+<div class="stepTextBlock {{this.type}} card">
+  <div class="stepTextBlockIcon">
+    {{{ textblockimage this.type}}}
+  </div>
+  <div class="stepTextBlockContent">
+    {{#if this.title}}
+      <div class="stepTextBlockTitle">{{this.title}}</div>
+    {{/if}}
+    {{#if this.description}}
+      <div class="stepTextBlockDescription">{{{this.description}}}</div>
+    {{/if}}
+  </div>
+</div>
+{{/inline}}
+
+<body class="bg">
+  {{#if exportSettings.headerLogo}}
+    <div class="headerLogo">
+      {{#if exportSettings.headerLogoLink}}
+        <a href="{{exportSettings.headerLogoLink}}" target="_blank">
+      {{/if}}
+      <img src="{{exportSettings.headerLogoDetails.imageBuffer}}"/>
+      {{#if exportSettings.headerLogoLink}}
+        </a>
+      {{/if}}
+    </div>
+  {{/if}}
+  {{#if exportSettings.includeTOS}}
+    <div class="tocFake show-md fullyHide">
+      <div class="icon doubleCheesburger"></div>
+    </div>
+    <div class="tocReal toc hide-md fullyHide"></div>
+    <div class="tocNonJs toc is-position-fixed">
+      <ol class="toc-list">
+        {{#each steps}}
+        <li class="toc-list-item is-active-li">
+          <a href="#step-{{inc @index}}" class="toc-link node-name--DIV">
+            {{#if ../exportSettings.includeNumbers}}{{this.indexString}} {{/if}}{{this.title}}
+          </a>
+        </li>
+        {{/each}}
+      </ol>
+    </div>
+  {{/if}}
+  <div class="topSection">
+    <div class="container grid-md text-center guideDetailsWrapper">
+      <div class="columns flex-centered">
+        <div class="column col-xs-10 col-md-10 col-xl-10">
+          <h2 class="headline title">{{guide.title}}</h2>
+          {{#if guide.description}}
+            <span class="description quillClasses">{{{guide.description}}}</span>
+          {{/if}}
+        </div>
+     </div>
+    </div>
+  </div>
+  <div class="section">
+      <div class="container grid-md">
+        {{#each steps}}
+        <div class="columns flex-centered">
+          <div class="column col-xs-10 col-md-10 col-xl-10">
+            <div class="card stepCard" data-step-id="step-{{inc @index}}" id="step-{{this.id}}">
+              {{#each (picktextblocks this.textblocks 'before-title')}}
+                {{> textBlock this}}
+              {{/each}}
+    
+              <div class="card-header card-title h5  {{#unless this.contentBlock}} headline {{/unless}}    {{#if (and (ifEqualsInline this.includeInToc false) (defineInline this.parentId) ) }}substep{{/if}}" id="step-{{inc @index}}">
+                {{#if (and ../exportSettings.includeCheckboxes (not this.contentBlock))}}
+                    <label class="form-checkbox">
+                      <input type="checkbox" class="completionCheckbox" data-step-id="step-{{inc @index}}">
+                      <i class="form-icon"></i>
+                    </label>
+                {{/if}}
+                <div class="stepTitle">
+                {{#if ../exportSettings.includeNumbers}}
+                  {{#unless this.contentBlock}}
+                    <b class="stepTitleNumber">{{this.indexString}} </b>
+                  {{/unless}}
+                {{/if}}
+                <span class="stepTitleText">{{this.title}}</span>
+                </div>
+              </div>
+              {{#each (picktextblocks this.textblocks 'after-title')}}
+                {{> textBlock this}}
+              {{/each}}
+
+              {{#*inline "descriptionPartial"}}
+                {{#each (picktextblocks this.textblocks 'before-description')}}
+                  {{> textBlock this}}
+                {{/each}}
+                {{#if this.description}}
+                  <div class="card-body stepDescription quillClasses">{{{this.description}}}</div>
+                {{/if}}
+                {{#each (picktextblocks this.textblocks 'after-description')}}
+                  {{> textBlock this}}
+                {{/each}}
+              {{/inline}}
+
+              {{#ifEquals ../exportSettings.textPosition 'top'}} 
+                {{> descriptionPartial}}
+              {{/ifEquals}}
+              {{#each (picktextblocks this.textblocks 'before-image')}}
+                {{> textBlock this}}
+              {{/each}}
+              {{#*inline "stepImage"}}
+                <img 
+                  alt="{{this.title}}" 
+                  class="img-responsive stepImage" 
+        
+                {{#if ../exportSettings.embedAssets}}
+                  src="{{this.base64str}}" 
+                {{else}}
+                  src="{{this.screenshotRelativePath}}" 
+                {{/if}}
+        
+                />
+              {{/inline}}
+              
+              {{#if this.path}}
+                <div class="card-image">
+                  {{> stepImage this}}
+                </div>
+              {{/if}}
+
+              
+                {{#if this.multiImageSubSteps}}
+                  {{#each this.multiImageSubSteps}}
+                    {{#each ../this.settings.substepBlocksSettings}}
+                      {{#if this.show}}
+                        <div class="card-body substepCard">
+                          {{#ifEquals this.id 'title'}}
+                            {{#if ../this.title}}
+                              <div class="h5 substepTitle">{{../this.title}}</div>
+                            {{/if}}
+                          {{/ifEquals}}
+                          {{#ifEquals this.id 'description'}}
+                            {{#if ../this.description}}
+                              <div class="stepDescription substepDescription quillClasses">{{{../this.description}}}</div>
+                            {{/if}}
+                          {{/ifEquals}}
+                          {{#ifEquals this.id 'image'}}
+                            {{#if ../this.path}}
+                              <div class="card-image">
+                                {{> stepImage ../this}}
+                              </div>
+                            {{/if}}
+
+                          {{/ifEquals}}
+                          </div>
+                      {{/if}}
+                    {{/each}}
+                  {{/each}}
+                {{/if}}
+
+
+
+
+              {{#each (picktextblocks this.textblocks 'after-image')}}
+                {{> textBlock this}}
+              {{/each}}
+
+              {{#ifEquals ../exportSettings.textPosition 'bottom'}} 
+                {{> descriptionPartial}}
+              {{/ifEquals}}
+            </div>
+          </div>
+        </div>
+        {{/each}}
+      </div>
+    </div>
+
+</body>
+</html>

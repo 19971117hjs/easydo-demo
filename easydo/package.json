@@ -1,0 +1,63 @@
+{
+  "name": "easydo",
+  "productName": "easyDo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "easyDo desktop rebuild based on a modern Electron + Vue 3 architecture.",
+  "type": "module",
+  "main": "./out/main/index.cjs",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "vue-tsc --noEmit && electron-vite build",
+    "preview": "electron-vite preview",
+    "typecheck": "vue-tsc --noEmit",
+    "dist:mac": "pnpm build && electron-builder --mac dmg"
+  },
+  "dependencies": {
+    "active-win": "file:../vendor-deps/active-win",
+    "libuiohook-node": "link:../vendor-deps/libuiohook-node",
+    "pinia": "^2.3.1",
+    "sharp": "file:../vendor-deps/sharp",
+    "tesseract.js": "2.1.5",
+    "tr46": "^0.0.3",
+    "vue": "^3.5.13",
+    "vue-router": "^4.5.1",
+    "webidl-conversions": "^3.0.1",
+    "whatwg-url": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "@vitejs/plugin-vue": "^5.2.3",
+    "electron": "22.3.18",
+    "electron-builder": "^26.0.12",
+    "electron-vite": "^2.3.0",
+    "typescript": "^5.8.3",
+    "vite": "^5.4.19",
+    "vue-tsc": "^2.2.10"
+  },
+  "build": {
+    "appId": "com.easydo.desktop",
+    "productName": "easyDo",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "out/**/*",
+      "resources/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "category": "public.app-category.productivity",
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
+    }
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron",
+      "esbuild"
+    ]
+  }
+}

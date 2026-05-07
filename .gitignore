@@ -1,0 +1,27 @@
+# macOS / editor
+.DS_Store
+*.swp
+*.swo
+Folge_local_runtime.code-workspace
+
+# dependency installs
+node_modules/
+
+# local caches
+.npm-cache/
+.playwright-cli/
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# local packaging / build output
+.packaging/
+release/
+output/
+*.dmg
+*.blockmap
+
+# local env files
+.env
+.env.*

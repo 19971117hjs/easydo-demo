@@ -1,0 +1,116 @@
+/* KEEP IN SYNC WITH RENDERE/ASSETS/TEXTBLOCK.CSS!!!!!!!!!!! */
+/* ALSO COLORS ARE IN TEXTBLOCK.JS */
+.stepTextBlock {
+  display: flex;
+  border-radius: 0.25em;
+  border-bottom: 3px solid transparent;
+  flex-direction: row;
+  align-items: center;
+  padding: 0.75em;
+  margin: 1em 0em;
+}
+.stepTextBlock.error {
+  border-color: #feb2b2;
+  background-color: #fed7d7;
+}
+.stepTextBlock.info {
+  border-color: #90cdf4;
+  background-color: #bee3f8;
+}
+.stepTextBlock.success {
+  border-color: #9ae6b4;
+  background-color: #c6f6d5;
+}
+.stepTextBlock.warning {
+  border-color: #faf089;
+  background-color: #fefcbf;
+}
+
+.stepTextBlock.dark {
+  border-color: #e5e7eb;
+  background-color: #f9fafb;
+}
+
+.stepTextBlock .stepTextBlockIcon {
+  width: 2.5em;
+  height: 2.5em;
+  flex-shrink: 0;
+  justify-content: center;
+  align-items: center;
+  display: flex;
+  border: 2px solid transparent;
+  border-radius: 9999px;
+}
+.stepTextBlock.error .stepTextBlockIcon {
+  border-color: #f56565;
+  background-color: #fff5f5;
+  color: #f56565;
+}
+.stepTextBlock.info .stepTextBlockIcon {
+  border-color: #4299e1;
+  background-color: #ebf8ff;
+  color: #4299e1;
+}
+.stepTextBlock.success .stepTextBlockIcon {
+  border-color: #48bb78;
+  background-color: #f0fff4;
+  color: #48bb78;
+}
+.stepTextBlock.warning .stepTextBlockIcon {
+  border-color: #ecc94b;
+  background-color: #fffff0;
+  color: #ecc94b;
+}
+.stepTextBlock.dark .stepTextBlockIcon {
+  border-color: #e5e7eb;
+    /* No BG intentionally */
+  color: #e5e7eb;
+}
+
+.stepTextBlock .stepTextBlockIcon svg{
+  width: 1.5em;
+}
+.stepTextBlock .stepTextBlockContent {
+  margin-left: 1em;
+}
+.stepTextBlock .stepTextBlockTitle {
+  font-size: 1.125em;
+  font-weight: 600;
+}
+.stepTextBlock.error .stepTextBlockTitle {
+  color: #9b2c2c;
+}
+.stepTextBlock.dark .stepTextBlockTitle {
+  color: #212936;
+}
+.stepTextBlock.info .stepTextBlockTitle {
+  color: #2c5282;
+}
+.stepTextBlock.success .stepTextBlockTitle {
+  color: #276749;
+}
+.stepTextBlock.warning .stepTextBlockTitle {
+  color: #975a16;
+}
+.stepTextBlock .stepTextBlockDescription {
+  font-size: .875em;
+}
+.stepTextBlock.error .stepTextBlockDescription {
+  color: #e53e3e;
+}
+.stepTextBlock.info .stepTextBlockDescription {
+  color: #3182ce;
+}
+.stepTextBlock.success .stepTextBlockDescription {
+  color: #38a169;
+}
+.stepTextBlock.warning .stepTextBlockDescription {
+  color: #d69e2e;
+}
+.stepTextBlock.dark .stepTextBlockDescription {
+  color: #1f2937;
+}
+.stepTextBlock .stepTextBlockDescription p {
+  padding: 0;
+  margin: 0;
+}

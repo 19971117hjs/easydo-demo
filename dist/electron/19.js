@@ -1,0 +1,2 @@
+(window.webpackJsonp=window.webpackJsonp||[]).push([[19],{747:function(o,e,t){"use strict";t.r(e);var n={components:{CoverPageEditor:t(452).a},methods:{goToEditor:function(){this.$electron.ipcRenderer.send("app-command:go-to-editor")}}},r=t(96),i=Object(r.a)(n,(function(){var o=this.$createElement;return(this._self._c||o)("CoverPageEditor",{on:{cancel:this.goToEditor}})}),[],!1,null,null,null);e.default=i.exports}}]);
+//# sourceMappingURL=19.js.map

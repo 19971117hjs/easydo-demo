@@ -1,0 +1,93 @@
+<div class="guide-content">
+  <p>{{{guide.description}}}</p>
+  <hr/>
+
+  {{#*inline "textBlock"}}
+  <div class="wp-block-note {{this.type}}">
+    <h3>{{this.title}}</h3>
+    <p>{{{this.description}}}</p>
+  </div>
+  {{/inline}}
+
+  {{#each steps}}
+  <div class="step-card">
+    {{#each (picktextblocks this.textblocks 'before-title')}}
+      {{> textBlock this}}
+    {{/each}}
+    
+    <h2 style="display:flex;">{{this.indexString}} {{this.title}}</h2>
+
+    {{#each (picktextblocks this.textblocks 'after-title')}}
+      {{> textBlock this}}
+    {{/each}}
+
+    {{#*inline "descriptionPartial"}}
+      {{#each (picktextblocks this.textblocks 'before-description')}}
+        {{> textBlock this}}
+      {{/each}}
+
+      {{#if this.description}}
+        <div class="step-description">{{{this.description}}}</div>
+      {{/if}}
+
+      {{#each (picktextblocks this.textblocks 'after-description')}}
+        {{> textBlock this}}
+      {{/each}}
+    {{/inline}}
+
+    {{#*inline "stepImage"}}
+      <figure class="wp-block-image size-large">
+        <img src="[[image-{{this.id}}]]" alt="{{this.title}}" class="wp-image-{{this.id}}" width="650" />
+      </figure>
+    {{/inline}}
+
+    {{#ifEquals ../exportSettings.textPosition 'top'}} 
+      {{> descriptionPartial}}
+    {{/ifEquals}}
+
+    {{#each (picktextblocks this.textblocks 'before-image')}}
+      {{> textBlock this}}
+    {{/each}}
+
+    {{#if this.screenshotFilename}}
+      {{> stepImage this}}
+    {{/if}}
+
+    {{#if this.multiImageSubSteps}}
+      <div class="wp-block-columns">
+      {{#each this.multiImageSubSteps}}
+        <div class="wp-block-column substep-card">
+          {{#each ../this.settings.substepBlocksSettings}}
+            {{#if this.show}}
+              {{#ifEquals this.id 'title'}}
+                {{#if ../this.title}}
+                  <h4 class="substep-title">{{../this.title}}</h4>
+                {{/if}}
+              {{/ifEquals}}
+              {{#ifEquals this.id 'description'}}
+                {{#if ../this.description}}
+                  <p class="substep-description">{{{../this.description}}}</p>
+                {{/if}}
+              {{/ifEquals}}
+              {{#ifEquals this.id 'image'}}
+                {{#if ../this.path}}
+                  {{> stepImage ../this}}
+                {{/if}}
+              {{/ifEquals}}
+            {{/if}}
+          {{/each}}
+        </div>
+      {{/each}}
+      </div>
+    {{/if}}
+
+    {{#each (picktextblocks this.textblocks 'after-image')}}
+      {{> textBlock this}}
+    {{/each}}
+    
+    {{#ifEquals ../exportSettings.textPosition 'bottom'}} 
+      {{> descriptionPartial}}
+    {{/ifEquals}}
+  </div>
+  {{/each}}
+</div>

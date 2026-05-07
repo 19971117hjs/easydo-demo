@@ -1,0 +1,100 @@
+
+
+
+{{{guide.description}}}
+<hr/>
+
+{{#*inline "textBlock"}}
+<ac:structured-macro ac:name="note">
+  <ac:parameter ac:name="{{{confluenceTextBlockType this.type}}}">true</ac:parameter>
+  <ac:rich-text-body>
+    <h3>{{this.title}}</h3>
+    <p>{{{this.description}}}</p>
+  </ac:rich-text-body>
+</ac:structured-macro>
+{{/inline}}
+
+  {{#each steps}}
+  <div class="stepCard">
+    {{#each (picktextblocks this.textblocks 'before-title')}}
+      {{> textBlock this}}
+    {{/each}}
+    <p>&nbsp;</p>
+    <h1 style="display:flex;">{{this.indexString}} {{this.title}}</h1>
+
+    {{#each (picktextblocks this.textblocks 'after-title')}}
+      {{> textBlock this}}
+    {{/each}}
+
+    {{#*inline "descriptionPartial"}}
+      {{#each (picktextblocks this.textblocks 'before-description')}}
+        {{> textBlock this}}
+      {{/each}}
+
+      {{#if this.description}}
+        {{{this.description}}}
+        <p>&nbsp;</p>
+      {{/if}}
+
+      {{#each (picktextblocks this.textblocks 'after-description')}}
+        {{> textBlock this}}
+      {{/each}}
+    {{/inline}}
+
+
+    {{#*inline "stepImage"}}
+      <ac:image ac:border="true" ac:width="650">
+        <ri:url ri:value="[[image-{{this.id}}]]" />
+      </ac:image>
+    {{/inline}}
+
+    {{#ifEquals ../exportSettings.textPosition 'top'}} 
+      {{> descriptionPartial}}
+    {{/ifEquals}}
+
+    {{#each (picktextblocks this.textblocks 'before-image')}}
+      {{> textBlock this}}
+    {{/each}}
+
+    {{#if this.screenshotFilename}}
+      {{> stepImage this}}
+    {{/if}}
+
+
+
+    {{#if this.multiImageSubSteps}}
+      {{#each this.multiImageSubSteps}}
+        {{#each ../this.settings.substepBlocksSettings}}
+          {{#if this.show}}
+            <div class="substepCard">
+              {{#ifEquals this.id 'title'}}
+                {{#if ../this.title}}
+                  <p>&nbsp;</p>
+                  <div class="substepTitle">{{../this.title}}</div>
+                {{/if}}
+              {{/ifEquals}}
+              {{#ifEquals this.id 'description'}}
+                {{#if ../this.description}}
+                  <div class="stepDescription">{{{../this.description}}}</div>
+                  <br/>
+                {{/if}}
+              {{/ifEquals}}
+              {{#ifEquals this.id 'image'}}
+                {{#if ../this.path}}
+                  {{> stepImage ../this}}
+                {{/if}}
+              {{/ifEquals}}
+            </div>
+          {{/if}}
+        {{/each}}
+      {{/each}}
+    {{/if}}
+
+    {{#each (picktextblocks this.textblocks 'after-image')}}
+      {{> textBlock this}}
+    {{/each}}
+    {{#ifEquals ../exportSettings.textPosition 'bottom'}} 
+      {{> descriptionPartial}}
+    {{/ifEquals}}
+  </div>
+  {{/each}}
