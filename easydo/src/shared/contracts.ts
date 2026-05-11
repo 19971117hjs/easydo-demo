@@ -173,6 +173,7 @@ export interface StepAnnotation {
   type: StepAnnotationType;
   x: number;
   y: number;
+  rotation?: number | null;
   width?: number | null;
   height?: number | null;
   x2?: number | null;

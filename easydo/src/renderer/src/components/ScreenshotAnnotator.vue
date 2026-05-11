@@ -14,7 +14,7 @@ import {
 } from "@shared/step-annotations";
 
 type AnnotationTool = "select" | "crop" | StepAnnotationType;
-type ResizeHandle = "nw" | "ne" | "se" | "sw" | "start" | "end";
+type ResizeHandle = "nw" | "ne" | "se" | "sw" | "n" | "s" | "e" | "w" | "center" | "start" | "end";
 type AreaAnnotationType =
   | "rect"
   | "ellipse"
@@ -70,6 +70,7 @@ const props = withDefaults(
 const emit = defineEmits<{
   (event: "update:annotations", value: StepAnnotation[]): void;
   (event: "update:selectedId", value: string | null): void;
+  (event: "update:activeTool", value: AnnotationTool): void;
   (event: "request:crop", value: { x: number; y: number; width: number; height: number }): void;
 }>();
 
@@ -80,6 +81,7 @@ const workingAnnotations = ref<StepAnnotation[]>(normalizeStepAnnotations(props.
 const selectedId = ref<string | null>(null);
 const interaction = ref<InteractionState | null>(null);
 const draftAnnotation = ref<StepAnnotation | null>(null);
+const selectionBoxStyle = ref<Record<string, string>>({});
 
 watch(
   () => props.annotations,
@@ -139,6 +141,45 @@ const selectedDisplayAnnotation = computed(
   () => displayAnnotations.value.find((annotation) => annotation.id === selectedId.value) ?? null
 );
 
+watch(
+  selectedDisplayAnnotation,
+  (annotation) => {
+    if (annotation) {
+      selectionBoxStyle.value = buildSelectionBoxStyle(annotation);
+    } else {
+      selectionBoxStyle.value = {};
+    }
+  },
+  { deep: true }
+);
+
+const currentCursor = computed(() => {
+  if (interaction.value?.mode === "move") {
+    return "grabbing";
+  }
+  if (interaction.value?.mode === "resize") {
+    const handle = interaction.value.handle;
+    const cursorMap: Record<ResizeHandle, string> = {
+      nw: "nwse-resize",
+      ne: "nesw-resize",
+      se: "nwse-resize",
+      sw: "nesw-resize",
+      n: "ns-resize",
+      s: "ns-resize",
+      e: "ew-resize",
+      w: "ew-resize",
+      center: "grabbing",
+      start: "grab",
+      end: "grab"
+    };
+    return cursorMap[handle] || "grab";
+  }
+  if (props.activeTool === "select" && selectedDisplayAnnotation.value) {
+    return "move";
+  }
+  return "default";
+});
+
 function clampUnit(value: number): number {
   if (!Number.isFinite(value)) {
     return 0;
@@ -149,6 +190,35 @@ function clampUnit(value: number): number {
 
 function clampSize(value: number, max = 1): number {
   return Math.max(0.012, Math.min(max, value));
+}
+
+function getAnnotationRotation(annotation: Pick<StepAnnotation, "rotation">): number {
+  return Number.isFinite(annotation.rotation) ? (annotation.rotation ?? 0) : 0;
+}
+
+function buildSelectionBoxStyle(annotation: Pick<StepAnnotation, "rotation"> & { px: { x: number; y: number; width: number; height: number } }): Record<string, string> {
+  const rotation = getAnnotationRotation(annotation);
+  return {
+    left: `${annotation.px.x}px`,
+    top: `${annotation.px.y}px`,
+    width: `${annotation.px.width}px`,
+    height: `${annotation.px.height}px`,
+    transform: rotation ? `rotate(${rotation}deg)` : "none",
+    transformOrigin: "center center"
+  };
+}
+
+function updateSelectionBoxStyle(annotation: StepAnnotation): void {
+  const bounds = getAnnotationBounds(annotation);
+  selectionBoxStyle.value = buildSelectionBoxStyle({
+    rotation: annotation.rotation,
+    px: {
+      x: bounds.x * stageWidth.value,
+      y: bounds.y * stageHeight.value,
+      width: bounds.width * stageWidth.value,
+      height: bounds.height * stageHeight.value
+    }
+  });
 }
 
 function getAnnotationAspectRatio(annotation: StepAnnotation): number | null {
@@ -168,7 +238,7 @@ function getAnnotationAspectRatio(annotation: StepAnnotation): number | null {
 
 function preserveAreaAspectRatio(
   annotation: StepAnnotation,
-  handle: Exclude<ResizeHandle, "start" | "end">,
+  handle: Exclude<ResizeHandle, "start" | "end" | "center">,
   left: number,
   top: number,
   right: number,
@@ -184,10 +254,10 @@ function preserveAreaAspectRatio(
     };
   }
 
-  const anchorX = handle === "nw" || handle === "sw" ? right : left;
-  const anchorY = handle === "nw" || handle === "ne" ? bottom : top;
-  const maxWidth = handle === "nw" || handle === "sw" ? anchorX : 1 - anchorX;
-  const maxHeight = handle === "nw" || handle === "ne" ? anchorY : 1 - anchorY;
+  const anchorX = handle === "nw" || handle === "sw" || handle === "w" ? right : left;
+  const anchorY = handle === "nw" || handle === "ne" || handle === "n" ? bottom : top;
+  const maxWidth = handle === "nw" || handle === "sw" || handle === "w" ? anchorX : 1 - anchorX;
+  const maxHeight = handle === "nw" || handle === "ne" || handle === "n" ? anchorY : 1 - anchorY;
   const requestedWidth = clampSize(right - left, maxWidth);
   const requestedHeight = clampSize(bottom - top, maxHeight);
 
@@ -224,6 +294,16 @@ function preserveAreaAspectRatio(
 function setSelectedId(nextId: string | null): void {
   selectedId.value = nextId;
   emit("update:selectedId", nextId);
+
+  if (nextId) {
+    const annotation = displayAnnotations.value.find((item) => item.id === nextId);
+    if (annotation) {
+      selectionBoxStyle.value = buildSelectionBoxStyle(annotation);
+      return;
+    }
+  }
+
+  selectionBoxStyle.value = {};
 }
 
 function syncAnnotations(nextAnnotations: StepAnnotation[], nextSelectedId = selectedId.value): void {
@@ -233,8 +313,42 @@ function syncAnnotations(nextAnnotations: StepAnnotation[], nextSelectedId = sel
   setSelectedId(nextSelectedId);
 }
 
-function updateWorkingAnnotations(nextAnnotations: StepAnnotation[]): void {
-  workingAnnotations.value = withUpdatedAnnotationOrder(nextAnnotations);
+function updateWorkingAnnotation(id: string, updated: StepAnnotation): void {
+  workingAnnotations.value = workingAnnotations.value.map((annotation) => (annotation.id === id ? updated : annotation));
+  updateSelectionBoxStyle(updated);
+}
+
+function getRotationStyle(annotation: Pick<StepAnnotation, "rotation">): Record<string, string> {
+  const rotation = getAnnotationRotation(annotation);
+  return {
+    transform: rotation ? `rotate(${rotation}deg)` : "none",
+    transformOrigin: "center center"
+  };
+}
+
+function getAreaGroupTransform(annotation: typeof displayAnnotations.value[number]): string | undefined {
+  const rotation = getAnnotationRotation(annotation);
+  if (!rotation) {
+    return undefined;
+  }
+
+  const centerX = annotation.px.x + annotation.px.width / 2;
+  const centerY = annotation.px.y + annotation.px.height / 2;
+  return `rotate(${rotation} ${centerX} ${centerY})`;
+}
+
+function getRotationFromPoint(annotation: StepAnnotation, point: { x: number; y: number }): number {
+  const bounds = getAnnotationBounds(annotation);
+  const centerX = bounds.x + bounds.width / 2;
+  const centerY = bounds.y + bounds.height / 2;
+  const dx = point.x - centerX;
+  const dy = point.y - centerY;
+
+  if (Math.abs(dx) < 1e-5 && Math.abs(dy) < 1e-5) {
+    return getAnnotationRotation(annotation);
+  }
+
+  return Math.atan2(dy, dx) * (180 / Math.PI) + 90;
 }
 
 function getStagePoint(event: MouseEvent): { x: number; y: number } | null {
@@ -285,7 +399,8 @@ function createAreaAnnotation(type: AreaAnnotationType, start: { x: number; y: n
       textColor: "#ffffff",
       fontSize: 16,
       fontWeight: 700,
-      radius: 10
+      radius: 10,
+      opacity: 1
     };
   }
 
@@ -300,7 +415,8 @@ function createAreaAnnotation(type: AreaAnnotationType, start: { x: number; y: n
       fontWeight: 700,
       tooltipPlacement: "bottom",
       radius: 16,
-      shadow: true
+      shadow: true,
+      opacity: 1
     };
   }
 
@@ -520,16 +636,12 @@ function handleWindowMouseMove(event: MouseEvent): void {
     const dx = current.x - state.start.x;
     const dy = current.y - state.start.y;
     const updated = applyMove(state.original, dx, dy);
-    updateWorkingAnnotations(
-      workingAnnotations.value.map((annotation) => (annotation.id === state.id ? updated : annotation))
-    );
+    updateWorkingAnnotation(state.id, updated);
     return;
   }
 
   const updated = applyResize(state.original, state.handle, current);
-  updateWorkingAnnotations(
-    workingAnnotations.value.map((annotation) => (annotation.id === state.id ? updated : annotation))
-  );
+  updateWorkingAnnotation(state.id, updated);
 }
 
 function handleWindowMouseUp(event: MouseEvent): void {
@@ -593,6 +705,8 @@ function handleWindowMouseUp(event: MouseEvent): void {
     }
 
     syncAnnotations(nextAnnotations, created.id);
+    // Auto-switch to select mode after drawing
+    emit("update:activeTool", "select");
     return;
   }
 
@@ -646,16 +760,16 @@ function applyResize(annotation: StepAnnotation, handle: ResizeHandle, point: { 
     let right = bounds.x + bounds.width;
     let bottom = bounds.y + bounds.height;
 
-    if (handle === "nw" || handle === "sw") {
+    if (handle === "nw" || handle === "sw" || handle === "w") {
       left = point.x;
     }
-    if (handle === "ne" || handle === "se") {
+    if (handle === "ne" || handle === "se" || handle === "e") {
       right = point.x;
     }
-    if (handle === "nw" || handle === "ne") {
+    if (handle === "nw" || handle === "ne" || handle === "n") {
       top = point.y;
     }
-    if (handle === "sw" || handle === "se") {
+    if (handle === "sw" || handle === "se" || handle === "s") {
       bottom = point.y;
     }
 
@@ -672,15 +786,28 @@ function applyResize(annotation: StepAnnotation, handle: ResizeHandle, point: { 
     if (handle === "start") {
       return {
         ...annotation,
-        x: point.x,
-        y: point.y
+        x: clampUnit(point.x),
+        y: clampUnit(point.y)
       };
     }
 
     return {
       ...annotation,
-      x2: point.x,
-      y2: point.y
+      x2: clampUnit(point.x),
+      y2: clampUnit(point.y)
+    };
+  }
+
+  // Click type cannot be resized
+  if (annotation.type === "click") {
+    return annotation;
+  }
+
+  // Center handle is for rotation
+  if (handle === "center") {
+    return {
+      ...annotation,
+      rotation: getRotationFromPoint(annotation, point)
     };
   }
 
@@ -694,16 +821,16 @@ function applyResize(annotation: StepAnnotation, handle: ResizeHandle, point: { 
   let right = bounds.x + bounds.width;
   let bottom = bounds.y + bounds.height;
 
-  if (handle === "nw" || handle === "sw") {
+  if (handle === "nw" || handle === "sw" || handle === "w") {
     left = point.x;
   }
-  if (handle === "ne" || handle === "se") {
+  if (handle === "ne" || handle === "se" || handle === "e") {
     right = point.x;
   }
-  if (handle === "nw" || handle === "ne") {
+  if (handle === "nw" || handle === "ne" || handle === "n") {
     top = point.y;
   }
-  if (handle === "sw" || handle === "se") {
+  if (handle === "sw" || handle === "se" || handle === "s") {
     bottom = point.y;
   }
 
@@ -715,7 +842,7 @@ function applyResize(annotation: StepAnnotation, handle: ResizeHandle, point: { 
     annotation.type === "asset" || annotation.type === "magnify"
       ? preserveAreaAspectRatio(
           annotation,
-          handle,
+          handle as Exclude<ResizeHandle, "start" | "end" | "center">,
           normalizedLeft,
           normalizedTop,
           normalizedRight,
@@ -866,23 +993,34 @@ function suppressNativeDrag(event: DragEvent): void {
 
 function getHandleStyle(
   annotation: NonNullable<typeof selectedDisplayAnnotation.value>,
-  handle: Exclude<ResizeHandle, "start" | "end">
+  handle: string
 ): Record<string, string> {
   const size = 12;
   const half = size / 2;
-  const { x, y, width, height } = annotation.px;
+  const { width, height } = annotation.px;
+  const rotationDistance = 30; // Distance of rotation handle above the box
 
-  const positionMap: Record<Exclude<ResizeHandle, "start" | "end">, { left: number; top: number; cursor: string }> = {
-    nw: { left: x - half, top: y - half, cursor: "nwse-resize" },
-    ne: { left: x + width - half, top: y - half, cursor: "nesw-resize" },
-    se: { left: x + width - half, top: y + height - half, cursor: "nwse-resize" },
-    sw: { left: x - half, top: y + height - half, cursor: "nesw-resize" }
+  // Positions relative to the selection box (not absolute)
+  const positionMap: Record<string, { left: number; top: number; cursor: string }> = {
+    // Corners
+    nw: { left: -half, top: -half, cursor: "nwse-resize" },
+    ne: { left: width - half, top: -half, cursor: "nesw-resize" },
+    se: { left: width - half, top: height - half, cursor: "nwse-resize" },
+    sw: { left: -half, top: height - half, cursor: "nesw-resize" },
+    // Edges
+    n: { left: width / 2 - half, top: -half, cursor: "ns-resize" },
+    s: { left: width / 2 - half, top: height - half, cursor: "ns-resize" },
+    w: { left: -half, top: height / 2 - half, cursor: "ew-resize" },
+    e: { left: width - half, top: height / 2 - half, cursor: "ew-resize" },
+    // Rotation handle - above the top middle
+    center: { left: width / 2 - half, top: -rotationDistance - half, cursor: "grab" }
   };
 
+  const pos = positionMap[handle] || positionMap.nw;
   return {
-    left: `${positionMap[handle].left}px`,
-    top: `${positionMap[handle].top}px`,
-    cursor: positionMap[handle].cursor
+    left: `${pos.left}px`,
+    top: `${pos.top}px`,
+    cursor: pos.cursor
   };
 }
 
@@ -1069,7 +1207,7 @@ onBeforeUnmount(() => {
     ref="stageRef"
     class="annotator"
     tabindex="0"
-    :style="{ width: `${stageWidth}px`, height: `${stageHeight}px` }"
+    :style="{ width: `${stageWidth}px`, height: `${stageHeight}px`, cursor: currentCursor }"
     @keydown="handleKeydown"
     @mousedown="handleCanvasMouseDown"
     @dragstart.prevent="suppressNativeDrag"
@@ -1090,13 +1228,13 @@ onBeforeUnmount(() => {
         v-if="annotation.type === 'blur'"
         class="annotator__blur"
         :class="{ 'annotator__blur--selected': selectedId === annotation.id }"
-        :style="{
+        :style="[{
           left: `${annotation.px.x}px`,
           top: `${annotation.px.y}px`,
           width: `${annotation.px.width}px`,
           height: `${annotation.px.height}px`,
           backdropFilter: `blur(${annotation.blurAmount ?? 12}px)`
-        }"
+        }, getRotationStyle(annotation)]"
         @mousedown="handleAnnotationPointerDown(annotation, $event)"
       ></div>
 
@@ -1104,7 +1242,7 @@ onBeforeUnmount(() => {
         v-else-if="annotation.type === 'magnify'"
         class="annotator__magnify"
         :class="{ 'annotator__magnify--selected': selectedId === annotation.id }"
-        :style="getMagnifyStyle(annotation)"
+        :style="[getMagnifyStyle(annotation), getRotationStyle(annotation)]"
         @mousedown="handleAnnotationPointerDown(annotation, $event)"
       ></div>
 
@@ -1112,7 +1250,7 @@ onBeforeUnmount(() => {
         v-else-if="annotation.type === 'tooltip'"
         class="annotator__tooltip-html"
         :class="{ 'annotator__tooltip-html--selected': selectedId === annotation.id }"
-        :style="{
+        :style="[{
           left: `${annotation.px.x}px`,
           top: `${annotation.px.y}px`,
           width: `${annotation.px.width}px`,
@@ -1125,7 +1263,7 @@ onBeforeUnmount(() => {
           textAlign: annotation.textAlign ?? 'left',
           opacity: String(annotation.opacity ?? 1),
           boxShadow: annotation.shadow === false ? 'none' : '0 12px 24px rgba(18,24,32,0.24)'
-        }"
+        }, getRotationStyle(annotation)]"
         @mousedown="handleAnnotationPointerDown(annotation, $event)"
         @dblclick.stop="editTextAnnotation(annotation)"
       >
@@ -1137,7 +1275,7 @@ onBeforeUnmount(() => {
         v-else-if="annotation.type === 'asset' && annotation.asset"
         class="annotator__asset"
         :class="{ 'annotator__asset--selected': selectedId === annotation.id }"
-        :style="{
+        :style="[{
           left: `${annotation.px.x}px`,
           top: `${annotation.px.y}px`,
           width: `${annotation.px.width}px`,
@@ -1145,7 +1283,7 @@ onBeforeUnmount(() => {
           borderRadius: `${annotation.radius ?? 14}px`,
           opacity: String(annotation.opacity ?? 1),
           boxShadow: annotation.shadow === false ? 'none' : '0 12px 26px rgba(18,24,32,0.18)'
-        }"
+        }, getRotationStyle(annotation)]"
         @mousedown="handleAnnotationPointerDown(annotation, $event)"
       >
         <img
@@ -1227,6 +1365,7 @@ onBeforeUnmount(() => {
           v-else-if="annotation.type === 'cursor'"
           class="annotator__shape"
           :class="{ 'annotator__shape--active': selectedId === annotation.id }"
+          :transform="getAreaGroupTransform(annotation)"
           @mousedown="handleAnnotationPointerDown(annotation, $event)"
         >
           <g :transform="getCursorTransform(annotation)" filter="url(#annotatorCursorShadow)">
@@ -1299,6 +1438,7 @@ onBeforeUnmount(() => {
           v-else-if="annotation.type === 'ellipse'"
           class="annotator__shape"
           :class="{ 'annotator__shape--active': selectedId === annotation.id }"
+          :transform="getAreaGroupTransform(annotation)"
           @mousedown="handleAnnotationPointerDown(annotation, $event)"
         >
           <ellipse
@@ -1317,6 +1457,7 @@ onBeforeUnmount(() => {
           v-else-if="annotation.type === 'text'"
           class="annotator__shape"
           :class="{ 'annotator__shape--active': selectedId === annotation.id }"
+          :transform="getAreaGroupTransform(annotation)"
           @mousedown="handleAnnotationPointerDown(annotation, $event)"
           @dblclick.stop="editTextAnnotation(annotation)"
         >
@@ -1328,8 +1469,8 @@ onBeforeUnmount(() => {
             :rx="annotation.radius ?? 10"
             :ry="annotation.radius ?? 10"
             :fill="annotation.fillColor || annotation.backgroundColor || 'rgba(18,24,30,0.84)'"
-            stroke="rgba(255,255,255,0.82)"
-            stroke-width="1.4"
+            stroke="none"
+            stroke-width="0"
           />
           <text
             :x="getTextX(annotation)"
@@ -1348,6 +1489,7 @@ onBeforeUnmount(() => {
           v-else-if="annotation.type === 'highlight'"
           class="annotator__shape"
           :class="{ 'annotator__shape--active': selectedId === annotation.id }"
+          :transform="getAreaGroupTransform(annotation)"
           @mousedown="handleAnnotationPointerDown(annotation, $event)"
         >
           <rect
@@ -1368,6 +1510,7 @@ onBeforeUnmount(() => {
           v-else-if="annotation.type === 'rect'"
           class="annotator__shape"
           :class="{ 'annotator__shape--active': selectedId === annotation.id }"
+          :transform="getAreaGroupTransform(annotation)"
           @mousedown="handleAnnotationPointerDown(annotation, $event)"
         >
           <rect
@@ -1439,13 +1582,22 @@ onBeforeUnmount(() => {
       v-if="selectedDisplayAnnotation && props.activeTool === 'select'"
       class="annotator__selection"
       :class="{ 'annotator__selection--point': selectedDisplayAnnotation.type === 'click' }"
-      :style="{
-        left: `${selectedDisplayAnnotation.px.x}px`,
-        top: `${selectedDisplayAnnotation.px.y}px`,
-        width: `${selectedDisplayAnnotation.px.width}px`,
-        height: `${selectedDisplayAnnotation.px.height}px`
-      }"
+      :style="selectionBoxStyle"
     >
+      <!-- Rotation line -->
+      <svg
+        v-if="selectedDisplayAnnotation.type !== 'line' && selectedDisplayAnnotation.type !== 'arrow' && selectedDisplayAnnotation.type !== 'click'"
+        class="annotator__rotation-line"
+        :style="{
+          left: `${selectedDisplayAnnotation.px.width / 2 - 1}px`,
+          top: `-30px`,
+          width: '2px',
+          height: '30px'
+        }"
+      >
+        <line x1="0" y1="0" x2="0" y2="30" stroke="rgba(53, 109, 255, 0.6)" stroke-width="1" />
+      </svg>
+
       <template v-if="selectedDisplayAnnotation.type === 'line' || selectedDisplayAnnotation.type === 'arrow'">
         <button
           class="annotator__endpoint"
@@ -1468,12 +1620,13 @@ onBeforeUnmount(() => {
       </template>
       <template v-else-if="selectedDisplayAnnotation.type !== 'click'">
         <button
-          v-for="handle in ['nw', 'ne', 'se', 'sw']"
+          v-for="handle in ['nw', 'n', 'ne', 'w', 'e', 'sw', 's', 'se', 'center']"
           :key="handle"
           class="annotator__handle"
+          :class="{ 'annotator__handle--center': handle === 'center' }"
           type="button"
-          :style="getHandleStyle(selectedDisplayAnnotation, handle as 'nw' | 'ne' | 'se' | 'sw')"
-          @mousedown.stop="startResizingAnnotation(selectedDisplayAnnotation, handle as 'nw' | 'ne' | 'se' | 'sw', $event)"
+          :style="getHandleStyle(selectedDisplayAnnotation, handle)"
+          @mousedown.stop="startResizingAnnotation(selectedDisplayAnnotation, handle as ResizeHandle, $event)"
         ></button>
       </template>
     </div>
@@ -1520,6 +1673,11 @@ onBeforeUnmount(() => {
 .annotator__shape {
   cursor: move;
   pointer-events: auto;
+  transition: filter 200ms ease-out;
+}
+
+.annotator__shape:hover {
+  filter: drop-shadow(0 0 0.3rem rgba(53, 109, 255, 0.15));
 }
 
 .annotator__shape--active {
@@ -1532,19 +1690,34 @@ onBeforeUnmount(() => {
 .annotator__asset {
   position: absolute;
   cursor: move;
+  transition:
+    filter 150ms ease-out,
+    box-shadow 150ms ease-out,
+    background-color 150ms ease-out,
+    width 150ms ease-out,
+    height 150ms ease-out,
+    margin 150ms ease-out;
+  z-index: 10;
+}
+
+.annotator__blur:hover,
+.annotator__magnify:hover,
+.annotator__tooltip-html:hover,
+.annotator__asset:hover {
+  filter: drop-shadow(0 0 0.3rem rgba(53, 109, 255, 0.15));
 }
 
 .annotator__blur {
-  border: 3px solid #f2b91f;
+  border: none;
   border-radius: 12px;
-  background: rgba(16, 24, 32, 0.2);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.36);
+  background: rgba(200, 200, 200, 0.15);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: none;
 }
 
 .annotator__blur--selected {
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.9),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.46);
+  box-shadow: 0 0 0 2px rgba(53, 109, 255, 0.44);
 }
 
 .annotator__magnify {
@@ -1604,11 +1777,31 @@ onBeforeUnmount(() => {
   position: absolute;
   border: 2px dashed rgba(56, 105, 255, 0.95);
   border-radius: 12px;
+  pointer-events: auto;
+  animation: selectionFadeIn 200ms ease-out;
+  box-shadow: 0 0 0 1px rgba(53, 109, 255, 0.2);
+  will-change: transform;
+  overflow: visible;
+}
+
+.annotator__rotation-line {
+  position: absolute;
   pointer-events: none;
 }
 
 .annotator__selection--point {
   border-radius: 999px;
+}
+
+@keyframes selectionFadeIn {
+  from {
+    opacity: 0;
+    box-shadow: 0 0 0 0 rgba(53, 109, 255, 0.3);
+  }
+  to {
+    opacity: 1;
+    box-shadow: 0 0 0 1px rgba(53, 109, 255, 0.2);
+  }
 }
 
 .annotator__handle,
@@ -1622,6 +1815,42 @@ onBeforeUnmount(() => {
   box-shadow: 0 1px 8px rgba(19, 31, 53, 0.24);
   pointer-events: auto;
   padding: 0;
+  transition:
+    background-color 150ms ease-out,
+    box-shadow 150ms ease-out,
+    width 150ms ease-out,
+    height 150ms ease-out,
+    margin 150ms ease-out;
+  cursor: pointer;
+}
+
+.annotator__handle:hover,
+.annotator__endpoint:hover {
+  width: 16px;
+  height: 16px;
+  margin-left: -2px;
+  margin-top: -2px;
+  background: #4a7dff;
+  box-shadow: 0 2px 12px rgba(53, 109, 255, 0.4);
+}
+
+.annotator__handle--center {
+  width: 10px;
+  height: 10px;
+  background: #ffffff;
+  border: 2px solid #356dff;
+  cursor: grab;
+  z-index: 100;
+}
+
+.annotator__handle--center:hover {
+  width: 14px;
+  height: 14px;
+  margin-left: -2px;
+  margin-top: -2px;
+  background: #f0f0f0;
+  box-shadow: 0 2px 12px rgba(53, 109, 255, 0.4);
+  z-index: 100;
 }
 
 .annotator__endpoint {

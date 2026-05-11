@@ -156,6 +156,22 @@ function normalizeTooltipPlacement(
   return "bottom";
 }
 
+function normalizeRotation(value: number | null | undefined): number {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+
+  let normalized = (value ?? 0) % 360;
+  if (normalized > 180) {
+    normalized -= 360;
+  }
+  if (normalized <= -180) {
+    normalized += 360;
+  }
+
+  return normalized;
+}
+
 function normalizeArea(
   x: number,
   y: number,
@@ -375,12 +391,14 @@ function renderMagnifyBlock(
   const backgroundPositionY = 50 - centerY * zoom;
   const opacity = clampOpacity(annotation.opacity, 1);
   const shadow = annotation.shadow === false ? "none" : "0 12px 26px rgba(18,24,32,0.22)";
+  const rotation = normalizeRotation(annotation.rotation);
+  const transform = rotation ? `rotate(${rotation}deg)` : "none";
 
   return `<div
     class="stepAnnotationMagnify"
     style="left:${bounds.x * 100}%;top:${bounds.y * 100}%;width:${bounds.width * 100}%;height:${bounds.height * 100}%;border-color:${escapeHtml(
       annotation.color || "#ffffff"
-    )};opacity:${opacity};box-shadow:${shadow};"
+    )};opacity:${opacity};box-shadow:${shadow};transform:${transform};transform-origin:center center;"
   >
     <div
       class="stepAnnotationMagnifyLens"
@@ -399,11 +417,13 @@ function renderAssetBlock(annotation: StepAnnotation, assetUrl: string | null | 
   const bounds = getAnnotationBounds(annotation);
   const opacity = clampOpacity(annotation.opacity, 1);
   const shadow = annotation.shadow === false ? "none" : "0 12px 26px rgba(18,24,32,0.18)";
+  const rotation = normalizeRotation(annotation.rotation);
+  const transform = rotation ? `rotate(${rotation}deg)` : "none";
   return `<div
     class="stepAnnotationAsset"
     style="left:${bounds.x * 100}%;top:${bounds.y * 100}%;width:${bounds.width * 100}%;height:${bounds.height * 100}%;border-radius:${
       annotation.radius ?? 14
-    }px;opacity:${opacity};box-shadow:${shadow};"
+    }px;opacity:${opacity};box-shadow:${shadow};transform:${transform};transform-origin:center center;"
   >
     <img class="stepAnnotationAssetImage" src="${escapeHtml(assetUrl)}" alt="" />
   </div>`;
@@ -462,6 +482,7 @@ export function normalizeStepAnnotation(annotation: StepAnnotation, index = 0): 
     type,
     x: clampUnit(annotation.x),
     y: clampUnit(annotation.y),
+    rotation: normalizeRotation(annotation.rotation),
     color: annotation.color || DEFAULT_COLOR,
     fillColor: annotation.fillColor ?? null,
     textColor: annotation.textColor || DEFAULT_TEXT_COLOR,
@@ -582,6 +603,28 @@ export function withUpdatedAnnotationOrder(annotations: StepAnnotation[]): StepA
   return normalizeStepAnnotations(annotations);
 }
 
+function wrapAreaRotationMarkup(
+  annotation: StepAnnotation,
+  width: number,
+  height: number,
+  markup: string
+): string {
+  const rotation = normalizeRotation(annotation.rotation);
+  if (!rotation) {
+    return markup;
+  }
+
+  const area = getAnnotationBounds(annotation);
+  const cx = (area.x + area.width / 2) * width;
+  const cy = (area.y + area.height / 2) * height;
+
+  return `
+    <g transform="rotate(${rotation} ${cx} ${cy})">
+      ${markup}
+    </g>
+  `;
+}
+
 export function isAreaAnnotation(type: StepAnnotationType): boolean {
   return AREA_TYPES.has(type);
 }
@@ -686,12 +729,11 @@ function renderSvgAnnotation(annotation: StepAnnotation, width: number, height: 
 
   if (annotation.type === "cursor") {
     const area = getAnnotationBounds(annotation);
-    return renderCursorMarkup(
+    return wrapAreaRotationMarkup(
       annotation,
-      area.x * width,
-      area.y * height,
-      area.width * width,
-      area.height * height
+      width,
+      height,
+      renderCursorMarkup(annotation, area.x * width, area.y * height, area.width * width, area.height * height)
     );
   }
 
@@ -754,7 +796,11 @@ function renderSvgAnnotation(annotation: StepAnnotation, width: number, height: 
   const opacity = clampOpacity(annotation.opacity, 1);
 
   if (annotation.type === "ellipse") {
-    return `
+    return wrapAreaRotationMarkup(
+      annotation,
+      width,
+      height,
+      `
       <ellipse
         cx="${x + annotationWidth / 2}"
         cy="${y + annotationHeight / 2}"
@@ -765,15 +811,16 @@ function renderSvgAnnotation(annotation: StepAnnotation, width: number, height: 
         stroke="${stroke}"
         stroke-width="${strokeWidth}"
       />
-    `;
+    `
+    );
   }
 
   if (annotation.type === "text") {
-    return renderTextLikeAnnotation(annotation, width, height);
+    return wrapAreaRotationMarkup(annotation, width, height, renderTextLikeAnnotation(annotation, width, height));
   }
 
   if (annotation.type === "tooltip") {
-    return renderTextLikeAnnotation(annotation, width, height, true);
+    return wrapAreaRotationMarkup(annotation, width, height, renderTextLikeAnnotation(annotation, width, height, true));
   }
 
   if (annotation.type === "blur" || annotation.type === "magnify" || annotation.type === "asset") {
@@ -781,7 +828,11 @@ function renderSvgAnnotation(annotation: StepAnnotation, width: number, height: 
   }
 
   if (annotation.type === "highlight") {
-    return `
+    return wrapAreaRotationMarkup(
+      annotation,
+      width,
+      height,
+      `
       <rect
         x="${x}"
         y="${y}"
@@ -794,10 +845,15 @@ function renderSvgAnnotation(annotation: StepAnnotation, width: number, height: 
         stroke="${stroke}"
         stroke-width="${Math.max(1, strokeWidth - 1)}"
       />
-    `;
+    `
+    );
   }
 
-  return `
+  return wrapAreaRotationMarkup(
+    annotation,
+    width,
+    height,
+    `
     <rect
       x="${x}"
       y="${y}"
@@ -810,7 +866,8 @@ function renderSvgAnnotation(annotation: StepAnnotation, width: number, height: 
       stroke="${stroke}"
       stroke-width="${strokeWidth}"
     />
-  `;
+  `
+  );
 }
 
 export async function buildAnnotationOverlayMarkup(
@@ -829,11 +886,13 @@ export async function buildAnnotationOverlayMarkup(
     .filter((annotation) => annotation.type === "blur")
     .map((annotation) => {
       const bounds = getAnnotationBounds(annotation);
+      const rotation = normalizeRotation(annotation.rotation);
+      const transform = rotation ? `rotate(${rotation}deg)` : "none";
       return `<div
         class="stepAnnotationBlur"
         style="left:${bounds.x * 100}%;top:${bounds.y * 100}%;width:${bounds.width * 100}%;height:${bounds.height * 100}%;backdrop-filter:blur(${
           annotation.blurAmount ?? 12
-        }px);"
+        }px);transform:${transform};transform-origin:center center;"
       ></div>`;
     })
     .join("");

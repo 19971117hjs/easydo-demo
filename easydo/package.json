@@ -11,7 +11,10 @@
     "build": "vue-tsc --noEmit && electron-vite build",
     "preview": "electron-vite preview",
     "typecheck": "vue-tsc --noEmit",
-    "dist:mac": "pnpm build && electron-builder --mac dmg"
+    "dist:mac": "pnpm build && electron-builder --mac dmg",
+    "test": "vitest --run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui"
   },
   "dependencies": {
     "active-win": "file:../vendor-deps/active-win",
@@ -26,13 +29,19 @@
     "whatwg-url": "^5.0.0"
   },
   "devDependencies": {
+    "@testing-library/user-event": "^14.6.1",
+    "@testing-library/vue": "^8.1.0",
     "@types/node": "^22.15.3",
     "@vitejs/plugin-vue": "^5.2.3",
+    "@vitest/ui": "1.6.0",
+    "@vue/test-utils": "^2.4.10",
     "electron": "22.3.18",
     "electron-builder": "^26.0.12",
     "electron-vite": "^2.3.0",
+    "happy-dom": "^20.9.0",
     "typescript": "^5.8.3",
     "vite": "^5.4.19",
+    "vitest": "1.6.0",
     "vue-tsc": "^2.2.10"
   },
   "build": {

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
-import { useRouter } from "vue-router";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+import { useRouter } from 'vue-router';
 import type {
   AnnotationCursorVariant,
   AnnotationLineStyle,
@@ -9,18 +9,23 @@ import type {
   StepAnnotationType,
   StepDraft,
   StepSettings,
-  StepStatus
-} from "@shared/contracts";
-import RichTextEditor from "@renderer/components/RichTextEditor.vue";
-import ScreenshotAnnotator from "@renderer/components/ScreenshotAnnotator.vue";
-import { useEditorUiPrefs } from "@renderer/features/editor/useEditorUiPrefs";
-import { resolveAssetUrl } from "@renderer/utils/asset-url";
-import { getErrorMessage } from "@renderer/utils/error-message";
-import { useWorkbenchStore } from "@renderer/stores/workbench";
-import { getAnnotationBounds } from "@shared/step-annotations";
+  StepStatus,
+} from '@shared/contracts';
+import RichTextEditor from '@renderer/components/RichTextEditor.vue';
+import ScreenshotAnnotator from '@renderer/components/ScreenshotAnnotator.vue';
+import { useEditorUiPrefs } from '@renderer/features/editor/useEditorUiPrefs';
+import { resolveAssetUrl } from '@renderer/utils/asset-url';
+import { getErrorMessage } from '@renderer/utils/error-message';
+import { useWorkbenchStore } from '@renderer/stores/workbench';
+import { getAnnotationBounds } from '@shared/step-annotations';
 
-type AnnotationTool = "select" | "crop" | "ocr" | StepAnnotationType;
-type AddStepAction = "click-capture" | "simple-capture" | "import-images" | "empty-step" | "content-block";
+type AnnotationTool = 'select' | 'crop' | 'ocr' | StepAnnotationType;
+type AddStepAction =
+  | 'click-capture'
+  | 'simple-capture'
+  | 'import-images'
+  | 'empty-step'
+  | 'content-block';
 
 const TOOL_OPTIONS: Array<{
   id: AnnotationTool;
@@ -28,63 +33,77 @@ const TOOL_OPTIONS: Array<{
   icon: string;
   hint: string;
 }> = [
-  { id: "select", label: "Select", icon: "⌖", hint: "选择和拖动标注" },
-  { id: "click", label: "Click", icon: "①", hint: "添加点击编号" },
-  { id: "rect", label: "Box", icon: "▭", hint: "矩形高亮" },
-  { id: "ellipse", label: "Oval", icon: "◯", hint: "椭圆高亮" },
-  { id: "line", label: "Line", icon: "／", hint: "线段指引" },
-  { id: "brush", label: "Brush", icon: "〰", hint: "自由笔刷路径" },
-  { id: "arrow", label: "Arrow", icon: "↗", hint: "箭头指引" },
-  { id: "highlight", label: "Highlight", icon: "▨", hint: "半透明高亮区域" },
-  { id: "text", label: "Text", icon: "T", hint: "文字贴纸" },
-  { id: "tooltip", label: "Tooltip", icon: "💬", hint: "带箭头说明气泡" },
-  { id: "blur", label: "Blur", icon: "▓", hint: "模糊遮挡" },
-  { id: "magnify", label: "Magnify", icon: "⊕", hint: "局部放大镜" },
-  { id: "cursor", label: "Cursor", icon: "⌜", hint: "额外指针/输入光标" },
-  { id: "ocr", label: "OCR", icon: "OCR", hint: "识别当前截图里的文字内容" },
-  { id: "asset", label: "Asset", icon: "▣", hint: "插入外部图片贴图" },
-  { id: "crop", label: "Crop", icon: "⛶", hint: "裁切当前截图并重算标注" }
+  { id: 'select', label: 'Select', icon: '⌖', hint: '选择和拖动标注' },
+  { id: 'click', label: 'Click', icon: '①', hint: '添加点击编号' },
+  { id: 'rect', label: 'Box', icon: '▭', hint: '矩形高亮' },
+  { id: 'ellipse', label: 'Oval', icon: '◯', hint: '椭圆高亮' },
+  { id: 'line', label: 'Line', icon: '／', hint: '线段指引' },
+  { id: 'brush', label: 'Brush', icon: '〰', hint: '自由笔刷路径' },
+  { id: 'arrow', label: 'Arrow', icon: '↗', hint: '箭头指引' },
+  { id: 'highlight', label: 'Highlight', icon: '▨', hint: '半透明高亮区域' },
+  { id: 'text', label: 'Text', icon: 'T', hint: '文字贴纸' },
+  { id: 'tooltip', label: 'Tooltip', icon: '💬', hint: '带箭头说明气泡' },
+  { id: 'blur', label: 'Blur', icon: '▓', hint: '模糊遮挡' },
+  { id: 'magnify', label: 'Magnify', icon: '⊕', hint: '局部放大镜' },
+  { id: 'cursor', label: 'Cursor', icon: '⌜', hint: '额外指针/输入光标' },
+  { id: 'ocr', label: 'OCR', icon: 'OCR', hint: '识别当前截图里的文字内容' },
+  { id: 'asset', label: 'Asset', icon: '▣', hint: '插入外部图片贴图' },
+  { id: 'crop', label: 'Crop', icon: '⛶', hint: '裁切当前截图并重算标注' },
 ];
 
-const COLOR_PRESETS = ["#f2b91f", "#356dff", "#ff6b57", "#17b26a", "#12181f", "#ffffff"];
+const COLOR_PRESETS = [
+  '#f2b91f',
+  '#356dff',
+  '#ff6b57',
+  '#17b26a',
+  '#12181f',
+  '#ffffff',
+];
 const FILL_PRESETS = [
-  "rgba(247, 196, 34, 0.34)",
-  "rgba(53, 109, 255, 0.18)",
-  "rgba(255, 107, 87, 0.2)",
-  "rgba(23, 178, 106, 0.18)",
-  "rgba(18, 24, 31, 0.88)",
-  "rgba(255, 255, 255, 0.84)"
+  'rgba(247, 196, 34, 0.34)',
+  'rgba(53, 109, 255, 0.18)',
+  'rgba(255, 107, 87, 0.2)',
+  'rgba(23, 178, 106, 0.18)',
+  'rgba(18, 24, 31, 0.88)',
+  'rgba(255, 255, 255, 0.84)',
 ];
 const ANNOTATION_TYPE_LABELS: Record<StepAnnotationType, string> = {
-  click: "Click marker",
-  rect: "Rectangle",
-  ellipse: "Oval",
-  line: "Line",
-  brush: "Brush",
-  arrow: "Arrow",
-  text: "Text",
-  blur: "Blur",
-  highlight: "Highlight",
-  magnify: "Magnify",
-  cursor: "Cursor",
-  asset: "Asset sticker",
-  tooltip: "Tooltip"
+  click: 'Click marker',
+  rect: 'Rectangle',
+  ellipse: 'Oval',
+  line: 'Line',
+  brush: 'Brush',
+  arrow: 'Arrow',
+  text: 'Text',
+  blur: 'Blur',
+  highlight: 'Highlight',
+  magnify: 'Magnify',
+  cursor: 'Cursor',
+  asset: 'Asset sticker',
+  tooltip: 'Tooltip',
 };
-const CURSOR_VARIANTS: Array<{ value: AnnotationCursorVariant; label: string }> = [
-  { value: "pointer", label: "Pointer" },
-  { value: "text", label: "Text cursor" },
-  { value: "hand", label: "Hand" }
+const CURSOR_VARIANTS: Array<{
+  value: AnnotationCursorVariant;
+  label: string;
+}> = [
+  { value: 'pointer', label: 'Pointer' },
+  { value: 'text', label: 'Text cursor' },
+  { value: 'hand', label: 'Hand' },
 ];
-const TOOLTIP_PLACEMENTS: Array<{ value: AnnotationTooltipPlacement; label: string }> = [
-  { value: "bottom", label: "Bottom" },
-  { value: "top", label: "Top" },
-  { value: "left", label: "Left" },
-  { value: "right", label: "Right" }
+const TOOLTIP_PLACEMENTS: Array<{
+  value: AnnotationTooltipPlacement;
+  label: string;
+}> = [
+  { value: 'bottom', label: 'Bottom' },
+  { value: 'top', label: 'Top' },
+  { value: 'left', label: 'Left' },
+  { value: 'right', label: 'Right' },
 ];
-const LINE_STYLE_OPTIONS: Array<{ value: AnnotationLineStyle; label: string }> = [
-  { value: "solid", label: "Solid" },
-  { value: "dashed", label: "Dashed" }
-];
+const LINE_STYLE_OPTIONS: Array<{ value: AnnotationLineStyle; label: string }> =
+  [
+    { value: 'solid', label: 'Solid' },
+    { value: 'dashed', label: 'Dashed' },
+  ];
 
 const START_OPTIONS: Array<{
   id: AddStepAction;
@@ -92,30 +111,30 @@ const START_OPTIONS: Array<{
   description: string;
 }> = [
   {
-    id: "click-capture",
-    title: "Capture screenshots with mouse clicks",
-    description: "按照操作顺序自动生成编号步骤。"
+    id: 'click-capture',
+    title: 'Capture screenshots with mouse clicks',
+    description: '按照操作顺序自动生成编号步骤。',
   },
   {
-    id: "simple-capture",
-    title: "Take simple screenshot",
-    description: "立即抓取当前屏幕生成新步骤。"
+    id: 'simple-capture',
+    title: 'Take simple screenshot',
+    description: '立即抓取当前屏幕生成新步骤。',
   },
   {
-    id: "import-images",
-    title: "Import any images as new steps",
-    description: "把已有截图直接导入成可编辑步骤。"
+    id: 'import-images',
+    title: 'Import any images as new steps',
+    description: '把已有截图直接导入成可编辑步骤。',
   },
   {
-    id: "empty-step",
-    title: "Empty step",
-    description: "从空白步骤开始，先写说明再补图片。"
+    id: 'empty-step',
+    title: 'Empty step',
+    description: '从空白步骤开始，先写说明再补图片。',
   },
   {
-    id: "content-block",
-    title: "Content block",
-    description: "插入纯文本说明块，适合提示和过渡内容。"
-  }
+    id: 'content-block',
+    title: 'Content block',
+    description: '插入纯文本说明块，适合提示和过渡内容。',
+  },
 ];
 
 const ZOOM_PRESETS = [10, 15, 19, 25, 33, 50, 67, 75, 100];
@@ -129,12 +148,12 @@ const {
   leftCollapsed,
   loadPrefs,
   rightCollapsed,
-  stepsListGridView
+  stepsListGridView,
 } = useEditorUiPrefs();
 
 const selectedStepId = ref<string | null>(null);
 const selectedAnnotationId = ref<string | null>(null);
-const activeTool = ref<AnnotationTool>("select");
+const activeTool = ref<AnnotationTool>('select');
 const menuOpen = ref(false);
 const addStepMenuOpen = ref(false);
 const stepMenuOpenId = ref<string | null>(null);
@@ -143,8 +162,8 @@ const zoomMenuOpen = ref(false);
 const exportMenuOpen = ref(false);
 const previewOpen = ref(false);
 const previewLoading = ref(false);
-const introActionError = ref("");
-const zoomMode = ref<"fit" | "manual">("fit");
+const introActionError = ref('');
+const zoomMode = ref<'fit' | 'manual'>('fit');
 const manualZoom = ref(100);
 const fitZoom = ref(100);
 const stageViewportRef = ref<HTMLElement | null>(null);
@@ -160,18 +179,28 @@ let resizeObserver: ResizeObserver | null = null;
 const currentProject = computed(() => workbench.currentProject);
 const steps = computed(() => currentProject.value?.steps ?? []);
 const hasSteps = computed(() => steps.value.length > 0);
-const selectedStep = computed(() =>
-  steps.value.find((step) => step.id === selectedStepId.value) ?? steps.value[0] ?? null
+const selectedStep = computed(
+  () =>
+    steps.value.find((step) => step.id === selectedStepId.value) ??
+    steps.value[0] ??
+    null
 );
 const selectedStepIndex = computed(() =>
-  selectedStep.value ? steps.value.findIndex((step) => step.id === selectedStep.value?.id) : -1
+  selectedStep.value
+    ? steps.value.findIndex((step) => step.id === selectedStep.value?.id)
+    : -1
 );
 const selectedStepAssetUrl = computed(() =>
-  selectedStep.value?.asset ? resolveAssetUrl(selectedStep.value.asset) : ""
+  selectedStep.value?.asset ? resolveAssetUrl(selectedStep.value.asset) : ''
 );
-const annotationCount = computed(() => selectedStep.value?.annotations?.length ?? 0);
+const annotationCount = computed(
+  () => selectedStep.value?.annotations?.length ?? 0
+);
 const selectedAnnotation = computed(
-  () => selectedStep.value?.annotations?.find((annotation) => annotation.id === selectedAnnotationId.value) ?? null
+  () =>
+    selectedStep.value?.annotations?.find(
+      (annotation) => annotation.id === selectedAnnotationId.value
+    ) ?? null
 );
 const selectedAnnotationSelection = computed(() => {
   if (!selectedAnnotation.value) {
@@ -183,25 +212,36 @@ const selectedAnnotationSelection = computed(() => {
     x: bounds.x,
     y: bounds.y,
     width: bounds.width,
-    height: bounds.height
+    height: bounds.height,
   };
 });
 const selectedAnnotationLabel = computed(() =>
-  selectedAnnotation.value ? ANNOTATION_TYPE_LABELS[selectedAnnotation.value.type] : ""
+  selectedAnnotation.value
+    ? ANNOTATION_TYPE_LABELS[selectedAnnotation.value.type]
+    : ''
 );
 const activeToolMeta = computed(
-  () => TOOL_OPTIONS.find((tool) => tool.id === activeTool.value) ?? TOOL_OPTIONS[0]
+  () =>
+    TOOL_OPTIONS.find((tool) => tool.id === activeTool.value) ?? TOOL_OPTIONS[0]
 );
 const clickStreamActive = computed(
-  () => workbench.clickStreamStatus !== "idle" && workbench.clickStreamStatus !== "stopped"
+  () =>
+    workbench.clickStreamStatus !== 'idle' &&
+    workbench.clickStreamStatus !== 'stopped'
 );
 const selectedStepAsset = computed(() => selectedStep.value?.asset ?? null);
-const resolvedZoom = computed(() => (zoomMode.value === "fit" ? fitZoom.value : manualZoom.value));
+const resolvedZoom = computed(() =>
+  zoomMode.value === 'fit' ? fitZoom.value : manualZoom.value
+);
 const zoomLabel = computed(() => `${Math.round(resolvedZoom.value)}%`);
-const isGuideIntroState = computed(() => Boolean(currentProject.value) && !hasSteps.value);
+const isGuideIntroState = computed(
+  () => Boolean(currentProject.value) && !hasSteps.value
+);
 const canMoveStepUp = computed(() => selectedStepIndex.value > 0);
 const canMoveStepDown = computed(
-  () => selectedStepIndex.value !== -1 && selectedStepIndex.value < steps.value.length - 1
+  () =>
+    selectedStepIndex.value !== -1 &&
+    selectedStepIndex.value < steps.value.length - 1
 );
 const clickProgressText = computed(() => {
   const progress = workbench.clickStreamProgress;
@@ -209,20 +249,22 @@ const clickProgressText = computed(() => {
 });
 const stepCounterLabel = computed(() => {
   if (!selectedStep.value || selectedStepIndex.value === -1) {
-    return "No step selected";
+    return 'No step selected';
   }
 
-  return `${selectedStepIndex.value + 1}. ${selectedStep.value.title || "Untitled step"}`;
+  return `${selectedStepIndex.value + 1}. ${
+    selectedStep.value.title || 'Untitled step'
+  }`;
 });
 const currentProjectDateLabel = computed(() => {
   if (!currentProject.value) {
-    return "";
+    return '';
   }
 
-  return new Date(currentProject.value.updatedAt).toLocaleDateString("zh-CN", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit"
+  return new Date(currentProject.value.updatedAt).toLocaleDateString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
   });
 });
 const introStatusText = computed(() => {
@@ -230,16 +272,16 @@ const introStatusText = computed(() => {
     return introActionError.value;
   }
 
-  if (workbench.clickStreamStatus === "handoff") {
-    return "Choose the target screen in the capture overlay, then continue recording there.";
+  if (workbench.clickStreamStatus === 'handoff') {
+    return 'Choose the target screen in the capture overlay, then continue recording there.';
   }
 
-  if (workbench.clickStreamStatus === "setup") {
-    return "Set what to capture in the floating capture controls, then start recording.";
+  if (workbench.clickStreamStatus === 'setup') {
+    return 'Set what to capture in the floating capture controls, then start recording.';
   }
 
-  if (workbench.clickStreamStatus === "paused") {
-    return "Click capture is paused. Adjust what to capture in the floating controls, then resume or finish.";
+  if (workbench.clickStreamStatus === 'paused') {
+    return 'Click capture is paused. Adjust what to capture in the floating controls, then resume or finish.';
   }
 
   if (clickStreamActive.value) {
@@ -251,53 +293,72 @@ const introStatusText = computed(() => {
   }
 
   if (!workbench.permissionSnapshot?.canCaptureScreens) {
-    return "Permissions still need verification, but the recorder now attempts the real capture flow instead of blocking here first.";
+    return 'Permissions still need verification, but the recorder now attempts the real capture flow instead of blocking here first.';
   }
 
-  return "Your guide has no steps yet. Add new steps from:";
+  return 'Your guide has no steps yet. Add new steps from:';
 });
 const introStatusTone = computed(() => {
   if (introActionError.value) {
-    return "danger";
+    return 'danger';
   }
   if (workbench.clickStreamError) {
-    return "danger";
+    return 'danger';
   }
   if (clickStreamActive.value) {
-    return "active";
+    return 'active';
   }
   if (!workbench.permissionSnapshot?.canCaptureScreens) {
-    return "warning";
+    return 'warning';
   }
-  return "neutral";
+  return 'neutral';
 });
 
 const annotationSupportsFill = computed(() =>
   Boolean(
     selectedAnnotation.value &&
-      ["rect", "ellipse", "highlight", "text", "tooltip"].includes(selectedAnnotation.value.type)
+      ['rect', 'ellipse', 'highlight', 'text', 'tooltip'].includes(
+        selectedAnnotation.value.type
+      )
   )
 );
 const annotationSupportsOpacity = computed(() =>
   Boolean(
     selectedAnnotation.value &&
-      ["rect", "ellipse", "highlight", "text", "tooltip", "asset", "magnify"].includes(selectedAnnotation.value.type)
+      [
+        'rect',
+        'ellipse',
+        'highlight',
+        'text',
+        'tooltip',
+        'asset',
+        'magnify',
+      ].includes(selectedAnnotation.value.type)
   )
 );
-const annotationSupportsText = computed(() =>
-  selectedAnnotation.value?.type === "text" || selectedAnnotation.value?.type === "tooltip"
+const annotationSupportsText = computed(
+  () =>
+    selectedAnnotation.value?.type === 'text' ||
+    selectedAnnotation.value?.type === 'tooltip'
 );
 const annotationSupportsLine = computed(() =>
   Boolean(
     selectedAnnotation.value &&
-      ["rect", "ellipse", "line", "brush", "arrow", "highlight"].includes(selectedAnnotation.value.type)
+      ['rect', 'ellipse', 'line', 'brush', 'arrow', 'highlight'].includes(
+        selectedAnnotation.value.type
+      )
   )
 );
-const annotationSupportsArrowHeads = computed(() =>
-  selectedAnnotation.value?.type === "line" || selectedAnnotation.value?.type === "arrow"
+const annotationSupportsArrowHeads = computed(
+  () =>
+    selectedAnnotation.value?.type === 'line' ||
+    selectedAnnotation.value?.type === 'arrow'
 );
 const annotationSupportsShadow = computed(() =>
-  Boolean(selectedAnnotation.value && ["tooltip", "magnify", "asset"].includes(selectedAnnotation.value.type))
+  Boolean(
+    selectedAnnotation.value &&
+      ['tooltip', 'magnify', 'asset'].includes(selectedAnnotation.value.type)
+  )
 );
 
 function clamp(value: number, min: number, max: number): number {
@@ -307,10 +368,12 @@ function clamp(value: number, min: number, max: number): number {
 function getCompleteStepSettings(step: StepDraft): StepSettings {
   return {
     forceNewPage: step.settings?.forceNewPage ?? false,
-    isContentBlock: step.settings?.isContentBlock ?? (step.kind === "content" || step.kind === "note"),
+    isContentBlock:
+      step.settings?.isContentBlock ??
+      (step.kind === 'content' || step.kind === 'note'),
     isMultiCaptureStep: step.settings?.isMultiCaptureStep ?? false,
     includeSubstepTitles: step.settings?.includeSubstepTitles ?? true,
-    showStepNumber: step.settings?.showStepNumber ?? (step.kind !== "content")
+    showStepNumber: step.settings?.showStepNumber ?? step.kind !== 'content',
   };
 }
 
@@ -337,23 +400,23 @@ function handleGlobalPointerDown(event: MouseEvent): void {
     return;
   }
 
-  if (!target.closest(".add-step-anchor")) {
+  if (!target.closest('.add-step-anchor')) {
     addStepMenuOpen.value = false;
   }
 
-  if (!target.closest(".step-card__menu-wrap")) {
+  if (!target.closest('.step-card__menu-wrap')) {
     stepMenuOpenId.value = null;
   }
 
-  if (!target.closest(".image-actions-menu-wrap")) {
+  if (!target.closest('.image-actions-menu-wrap')) {
     imageActionsMenuOpen.value = false;
   }
 
-  if (!target.closest(".zoom-control")) {
+  if (!target.closest('.zoom-control')) {
     zoomMenuOpen.value = false;
   }
 
-  if (!target.closest(".export-split")) {
+  if (!target.closest('.export-split')) {
     exportMenuOpen.value = false;
   }
 }
@@ -363,51 +426,58 @@ function selectStep(stepId: string): void {
   stepMenuOpenId.value = null;
 }
 
-function addStep(kind: StepDraft["kind"] = "action"): void {
+function addStep(kind: StepDraft['kind'] = 'action'): void {
   const nextId = workbench.addStep(kind);
   ensureSelectedStep(nextId);
   addStepMenuOpen.value = false;
 }
 
-function insertStepRelative(targetStep: StepDraft, position: "before" | "after", kind: StepDraft["kind"] = "action"): void {
+function insertStepRelative(
+  targetStep: StepDraft,
+  position: 'before' | 'after',
+  kind: StepDraft['kind'] = 'action'
+): void {
   const index = steps.value.findIndex((step) => step.id === targetStep.id);
   if (index === -1) {
     return;
   }
 
-  const nextId = workbench.insertStep(index + (position === "after" ? 1 : 0), kind);
+  const nextId = workbench.insertStep(
+    index + (position === 'after' ? 1 : 0),
+    kind
+  );
   ensureSelectedStep(nextId);
   stepMenuOpenId.value = null;
 }
 
 async function runAddStepAction(action: AddStepAction): Promise<void> {
   closeTransientPanels();
-  introActionError.value = "";
+  introActionError.value = '';
 
   try {
-    if (action === "click-capture") {
+    if (action === 'click-capture') {
       await workbench.startClickStream();
       return;
     }
 
-    if (action === "simple-capture") {
+    if (action === 'simple-capture') {
       await workbench.captureCurrentStep();
       ensureSelectedStep(workbench.lastCaptureResult?.capturedStep.id ?? null);
       return;
     }
 
-    if (action === "import-images") {
+    if (action === 'import-images') {
       const imported = await workbench.importImagesAsSteps();
       ensureSelectedStep(imported.at(-1)?.id ?? null);
       return;
     }
 
-    if (action === "content-block") {
-      addStep("content");
+    if (action === 'content-block') {
+      addStep('content');
       return;
     }
 
-    addStep("action");
+    addStep('action');
   } catch (error) {
     introActionError.value = getErrorMessage(error);
   }
@@ -436,21 +506,38 @@ function updateSelectedAnnotationPatch(patch: Partial<StepAnnotation>): void {
 
   updateSelectedAnnotations(
     (selectedStep.value.annotations ?? []).map((annotation) =>
-      annotation.id === selectedAnnotationId.value ? { ...annotation, ...patch } : annotation
+      annotation.id === selectedAnnotationId.value
+        ? { ...annotation, ...patch }
+        : annotation
     )
   );
 }
 
-function updateSelectedAnnotationNumberField(field: "strokeWidth" | "fontSize" | "opacity" | "radius" | "magnifyZoom" | "blurAmount", value: string): void {
+function updateSelectedAnnotationNumberField(
+  field:
+    | 'strokeWidth'
+    | 'fontSize'
+    | 'fontWeight'
+    | 'opacity'
+    | 'radius'
+    | 'magnifyZoom'
+    | 'blurAmount',
+  value: string
+): void {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) {
     return;
   }
 
-  updateSelectedAnnotationPatch({ [field]: numeric } as Partial<StepAnnotation>);
+  updateSelectedAnnotationPatch({
+    [field]: numeric,
+  } as Partial<StepAnnotation>);
 }
 
-function applyAnnotationPreset(field: "color" | "fillColor" | "textColor" | "backgroundColor", value: string): void {
+function applyAnnotationPreset(
+  field: 'color' | 'fillColor' | 'textColor' | 'backgroundColor',
+  value: string
+): void {
   updateSelectedAnnotationPatch({ [field]: value } as Partial<StepAnnotation>);
 }
 
@@ -471,7 +558,11 @@ function removeSelectedStep(): void {
   const currentId = selectedStep.value.id;
   const currentIndex = selectedStepIndex.value;
   workbench.removeStep(currentId);
-  const nextStep = steps.value[currentIndex] ?? steps.value[currentIndex - 1] ?? steps.value[0] ?? null;
+  const nextStep =
+    steps.value[currentIndex] ??
+    steps.value[currentIndex - 1] ??
+    steps.value[0] ??
+    null;
   selectedStepId.value = nextStep?.id ?? null;
 }
 
@@ -481,28 +572,34 @@ function removeSelectedAnnotation(): void {
   }
 
   updateSelectedAnnotations(
-    (selectedStep.value.annotations ?? []).filter((annotation) => annotation.id !== selectedAnnotationId.value)
+    (selectedStep.value.annotations ?? []).filter(
+      (annotation) => annotation.id !== selectedAnnotationId.value
+    )
   );
   selectedAnnotationId.value = null;
 }
 
-function moveSelectedAnnotationLayer(mode: "forward" | "backward" | "front" | "back"): void {
+function moveSelectedAnnotationLayer(
+  mode: 'forward' | 'backward' | 'front' | 'back'
+): void {
   if (!selectedStep.value || !selectedAnnotationId.value) {
     return;
   }
 
   const annotations = [...(selectedStep.value.annotations ?? [])];
-  const currentIndex = annotations.findIndex((annotation) => annotation.id === selectedAnnotationId.value);
+  const currentIndex = annotations.findIndex(
+    (annotation) => annotation.id === selectedAnnotationId.value
+  );
   if (currentIndex === -1) {
     return;
   }
 
   let nextIndex = currentIndex;
-  if (mode === "forward") {
+  if (mode === 'forward') {
     nextIndex = Math.min(annotations.length - 1, currentIndex + 1);
-  } else if (mode === "backward") {
+  } else if (mode === 'backward') {
     nextIndex = Math.max(0, currentIndex - 1);
-  } else if (mode === "front") {
+  } else if (mode === 'front') {
     nextIndex = annotations.length - 1;
   } else {
     nextIndex = 0;
@@ -522,22 +619,24 @@ function moveSelectedAnnotationLayer(mode: "forward" | "backward" | "front" | "b
 }
 
 async function setActiveTool(tool: AnnotationTool): Promise<void> {
-  if (tool === "ocr") {
+  if (tool === 'ocr') {
     workbench.toggleOcr();
-    activeTool.value = "select";
+    activeTool.value = 'select';
     return;
   }
 
-  if (tool === "asset") {
+  if (tool === 'asset') {
     if (!selectedStep.value) {
       return;
     }
 
-    const annotation = await workbench.importAnnotationAsset(selectedStep.value.id);
+    const annotation = await workbench.importAnnotationAsset(
+      selectedStep.value.id
+    );
     if (annotation) {
       selectedAnnotationId.value = annotation.id;
     }
-    activeTool.value = "select";
+    activeTool.value = 'select';
     return;
   }
 
@@ -559,23 +658,41 @@ async function runSelectedAreaOcr(): Promise<void> {
   }
 
   workbench.toggleOcr(true);
-  await workbench.recognizeStepText(selectedStep.value.id, selectedAnnotationSelection.value);
+  await workbench.recognizeStepText(
+    selectedStep.value.id,
+    selectedAnnotationSelection.value
+  );
 }
 
-async function handleCropRequest(selection: { x: number; y: number; width: number; height: number }): Promise<void> {
+async function handleCropRequest(selection: {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}): Promise<void> {
   if (!selectedStep.value?.asset) {
-    activeTool.value = "select";
+    activeTool.value = 'select';
     return;
   }
 
   if (selection.width < 0.01 || selection.height < 0.01) {
-    activeTool.value = "select";
+    activeTool.value = 'select';
+    return;
+  }
+
+  // Show confirmation dialog
+  const confirmed = window.confirm(
+    '确认裁切？裁切后标注会根据新的图片范围重新计算。\n\n点击"确定"继续，"取消"放弃裁切。'
+  );
+
+  if (!confirmed) {
+    activeTool.value = 'select';
     return;
   }
 
   await workbench.cropStepAsset(selectedStep.value.id, selection);
   selectedAnnotationId.value = null;
-  activeTool.value = "select";
+  activeTool.value = 'select';
   void refreshFitZoom();
 }
 
@@ -583,12 +700,15 @@ function toggleStepMenu(stepId: string): void {
   stepMenuOpenId.value = stepMenuOpenId.value === stepId ? null : stepId;
 }
 
-function moveSelectedStep(direction: "up" | "down"): void {
+function moveSelectedStep(direction: 'up' | 'down'): void {
   if (selectedStepIndex.value === -1) {
     return;
   }
 
-  const nextIndex = direction === "up" ? selectedStepIndex.value - 1 : selectedStepIndex.value + 1;
+  const nextIndex =
+    direction === 'up'
+      ? selectedStepIndex.value - 1
+      : selectedStepIndex.value + 1;
   if (nextIndex < 0 || nextIndex >= steps.value.length) {
     return;
   }
@@ -597,9 +717,9 @@ function moveSelectedStep(direction: "up" | "down"): void {
   ensureSelectedStep(selectedStep.value?.id ?? null);
 }
 
-function moveStepCard(step: StepDraft, direction: "up" | "down"): void {
+function moveStepCard(step: StepDraft, direction: 'up' | 'down'): void {
   const index = steps.value.findIndex((item) => item.id === step.id);
-  const nextIndex = direction === "up" ? index - 1 : index + 1;
+  const nextIndex = direction === 'up' ? index - 1 : index + 1;
   if (index === -1 || nextIndex < 0 || nextIndex >= steps.value.length) {
     return;
   }
@@ -616,7 +736,7 @@ function duplicateStepCard(step: StepDraft): void {
 }
 
 function removeStepCard(step: StepDraft): void {
-  if (!window.confirm(`Delete "${step.title || "this step"}"?`)) {
+  if (!window.confirm(`Delete "${step.title || 'this step'}"?`)) {
     return;
   }
 
@@ -624,7 +744,8 @@ function removeStepCard(step: StepDraft): void {
   const index = steps.value.findIndex((item) => item.id === step.id);
   workbench.removeStep(step.id);
   if (isCurrent) {
-    const nextStep = steps.value[index] ?? steps.value[index - 1] ?? steps.value[0] ?? null;
+    const nextStep =
+      steps.value[index] ?? steps.value[index - 1] ?? steps.value[0] ?? null;
     selectedStepId.value = nextStep?.id ?? null;
   }
   stepMenuOpenId.value = null;
@@ -663,22 +784,24 @@ async function exportSelectedImage(): Promise<void> {
   await window.easydo.exports.openPath(selectedStepAsset.value.absolutePath);
 }
 
-async function runStepImageAction(action: "capture" | "capture-area" | "import" | "reveal"): Promise<void> {
+async function runStepImageAction(
+  action: 'capture' | 'capture-area' | 'import' | 'reveal'
+): Promise<void> {
   imageActionsMenuOpen.value = false;
 
-  if (action === "capture") {
+  if (action === 'capture') {
     await workbench.captureCurrentStep();
     ensureSelectedStep(workbench.lastCaptureResult?.capturedStep.id ?? null);
     return;
   }
 
-  if (action === "capture-area") {
+  if (action === 'capture-area') {
     await workbench.beginAreaSelection();
     ensureSelectedStep(workbench.lastCaptureResult?.capturedStep.id ?? null);
     return;
   }
 
-  if (action === "import") {
+  if (action === 'import') {
     const imported = await workbench.importImagesAsSteps();
     ensureSelectedStep(imported.at(-1)?.id ?? null);
     return;
@@ -689,18 +812,18 @@ async function runStepImageAction(action: "capture" | "capture-area" | "import" 
   }
 }
 
-function setZoomPreset(value: number | "fit"): void {
-  if (value === "fit") {
-    zoomMode.value = "fit";
+function setZoomPreset(value: number | 'fit'): void {
+  if (value === 'fit') {
+    zoomMode.value = 'fit';
   } else {
-    zoomMode.value = "manual";
+    zoomMode.value = 'manual';
     manualZoom.value = value;
   }
 
   zoomMenuOpen.value = false;
 }
 
-function nudgeZoom(direction: "in" | "out"): void {
+function nudgeZoom(direction: 'in' | 'out'): void {
   setZoomPreset(getNextZoom(resolvedZoom.value, direction));
 }
 
@@ -714,7 +837,10 @@ function recalculateFitZoom(): void {
   }
 
   const viewportWidth = Math.max(280, viewport.clientWidth - 96);
-  const viewportHeight = Math.max(180, viewport.clientHeight - (focusedViewEnabled.value ? 120 : 92));
+  const viewportHeight = Math.max(
+    180,
+    viewport.clientHeight - (focusedViewEnabled.value ? 120 : 92)
+  );
   const widthRatio = viewportWidth / asset.width;
   const heightRatio = viewportHeight / asset.height;
   const nextZoom = Math.floor(Math.min(widthRatio, heightRatio, 1) * 100);
@@ -729,25 +855,33 @@ async function refreshFitZoom(): Promise<void> {
 async function openGuidesHome(): Promise<void> {
   menuOpen.value = false;
   closeTransientPanels();
-  await router.push("/");
+  await router.push('/');
 }
 
 async function openRecorderLab(): Promise<void> {
   menuOpen.value = false;
   closeTransientPanels();
-  await router.push("/recorder");
+  await router.push('/recorder');
 }
 
 function toggleFocusedView(): void {
   focusedViewEnabled.value = !focusedViewEnabled.value;
 }
 
-function getNextZoom(current: number, direction: "in" | "out"): number {
-  const presets = Array.from(new Set([...ZOOM_PRESETS, Math.round(current)])).sort((left, right) => left - right);
-  if (direction === "in") {
-    return presets.find((value) => value > current) ?? presets.at(-1) ?? current;
+function getNextZoom(current: number, direction: 'in' | 'out'): number {
+  const presets = Array.from(
+    new Set([...ZOOM_PRESETS, Math.round(current)])
+  ).sort((left, right) => left - right);
+  if (direction === 'in') {
+    return (
+      presets.find((value) => value > current) ?? presets.at(-1) ?? current
+    );
   }
-  return [...presets].reverse().find((value) => value < current) ?? presets[0] ?? current;
+  return (
+    [...presets].reverse().find((value) => value < current) ??
+    presets[0] ??
+    current
+  );
 }
 
 function isTypingTarget(target: EventTarget | null): boolean {
@@ -756,7 +890,9 @@ function isTypingTarget(target: EventTarget | null): boolean {
   }
 
   return Boolean(
-    target.closest("input, textarea, select, [contenteditable='true'], .tox, .mce-content-body, iframe")
+    target.closest(
+      "input, textarea, select, [contenteditable='true'], .tox, .mce-content-body, iframe"
+    )
   );
 }
 
@@ -765,37 +901,45 @@ function handleWindowKeydown(event: KeyboardEvent): void {
     return;
   }
 
-  if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
+  if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
     event.preventDefault();
     void saveCurrentProject();
     return;
   }
 
-  if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === "e") {
+  if (
+    (event.metaKey || event.ctrlKey) &&
+    event.shiftKey &&
+    event.key.toLowerCase() === 'e'
+  ) {
     event.preventDefault();
     void exportCurrentProject();
     return;
   }
 
-  if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === "p") {
+  if (
+    (event.metaKey || event.ctrlKey) &&
+    event.shiftKey &&
+    event.key.toLowerCase() === 'p'
+  ) {
     event.preventDefault();
     void openPreview();
     return;
   }
 
-  if (event.key === "ArrowUp") {
+  if (event.key === 'ArrowUp') {
     event.preventDefault();
-    moveSelectedStep("up");
+    moveSelectedStep('up');
     return;
   }
 
-  if (event.key === "ArrowDown") {
+  if (event.key === 'ArrowDown') {
     event.preventDefault();
-    moveSelectedStep("down");
+    moveSelectedStep('down');
     return;
   }
 
-  if (event.key === "Delete" || event.key === "Backspace") {
+  if (event.key === 'Delete' || event.key === 'Backspace') {
     if (selectedAnnotationId.value) {
       event.preventDefault();
       removeSelectedAnnotation();
@@ -803,27 +947,30 @@ function handleWindowKeydown(event: KeyboardEvent): void {
     return;
   }
 
-  if (event.key === "=" || event.key === "+") {
+  if (event.key === '=' || event.key === '+') {
     event.preventDefault();
-    setZoomPreset(getNextZoom(resolvedZoom.value, "in"));
+    setZoomPreset(getNextZoom(resolvedZoom.value, 'in'));
     return;
   }
 
-  if (event.key === "-") {
+  if (event.key === '-') {
     event.preventDefault();
-    setZoomPreset(getNextZoom(resolvedZoom.value, "out"));
+    setZoomPreset(getNextZoom(resolvedZoom.value, 'out'));
   }
 }
 
 watch(
-  () => steps.value.map((step) => step.id).join("|"),
+  () => steps.value.map((step) => step.id).join('|'),
   () => {
     if (!selectedStepId.value && steps.value.length > 0) {
       selectedStepId.value = steps.value[0].id;
       return;
     }
 
-    if (selectedStepId.value && !steps.value.some((step) => step.id === selectedStepId.value)) {
+    if (
+      selectedStepId.value &&
+      !steps.value.some((step) => step.id === selectedStepId.value)
+    ) {
       selectedStepId.value = steps.value[0]?.id ?? null;
     }
   },
@@ -834,12 +981,14 @@ watch(
   () => selectedStep.value?.id,
   () => {
     selectedAnnotationId.value = null;
-    activeTool.value = "select";
+    activeTool.value = 'select';
     stepMenuOpenId.value = null;
     void refreshFitZoom();
     nextTick(() => {
-      const row = stepsListRef.value?.querySelector<HTMLElement>(`[data-step-id="${selectedStepId.value}"]`);
-      row?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      const row = stepsListRef.value?.querySelector<HTMLElement>(
+        `[data-step-id="${selectedStepId.value}"]`
+      );
+      row?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     });
   }
 );
@@ -855,7 +1004,7 @@ watch(
 );
 
 watch([leftCollapsed, rightCollapsed, focusedViewEnabled], () => {
-  if (zoomMode.value === "fit") {
+  if (zoomMode.value === 'fit') {
     void refreshFitZoom();
   }
 });
@@ -878,7 +1027,7 @@ onMounted(async () => {
   }
 
   resizeObserver = new ResizeObserver(() => {
-    if (zoomMode.value === "fit") {
+    if (zoomMode.value === 'fit') {
       recalculateFitZoom();
     }
   });
@@ -887,9 +1036,9 @@ onMounted(async () => {
     resizeObserver.observe(stageViewportRef.value);
   }
 
-  window.addEventListener("pointerdown", handleGlobalPointerDown);
-  window.addEventListener("keydown", handleWindowKeydown);
-  window.addEventListener("resize", recalculateFitZoom);
+  window.addEventListener('pointerdown', handleGlobalPointerDown);
+  window.addEventListener('keydown', handleWindowKeydown);
+  window.addEventListener('resize', recalculateFitZoom);
   await refreshFitZoom();
 });
 
@@ -901,17 +1050,24 @@ onUnmounted(() => {
   stopClickProgress?.();
   resizeObserver?.disconnect();
   resizeObserver = null;
-  window.removeEventListener("pointerdown", handleGlobalPointerDown);
-  window.removeEventListener("keydown", handleWindowKeydown);
-  window.removeEventListener("resize", recalculateFitZoom);
+  window.removeEventListener('pointerdown', handleGlobalPointerDown);
+  window.removeEventListener('keydown', handleWindowKeydown);
+  window.removeEventListener('resize', recalculateFitZoom);
 });
 </script>
 
 <template>
   <section v-if="currentProject" class="editor-page">
-    <header class="editor-topbar" :class="{ 'editor-topbar--intro': isGuideIntroState }">
+    <header
+      class="editor-topbar"
+      :class="{ 'editor-topbar--intro': isGuideIntroState }"
+    >
       <div class="topbar-left">
-        <button class="menu-trigger" type="button" @click="menuOpen = !menuOpen">
+        <button
+          class="menu-trigger"
+          type="button"
+          @click="menuOpen = !menuOpen"
+        >
           <span class="menu-trigger__icon">☰</span>
           <span>Menu</span>
         </button>
@@ -919,15 +1075,31 @@ onUnmounted(() => {
 
       <div class="topbar-center">
         <div class="topbar-title-row">
-          <div class="topbar-title">{{ currentProject.name || "Untitled Guide" }}</div>
-          <button class="chrome-icon-button" type="button" title="Guide settings">⚙</button>
+          <div class="topbar-title">
+            {{ currentProject.name || 'Untitled Guide' }}
+          </div>
+          <button
+            class="chrome-icon-button"
+            type="button"
+            title="Guide settings"
+          >
+            ⚙
+          </button>
         </div>
-        <div v-if="!isGuideIntroState" class="topbar-subtitle">{{ currentProjectDateLabel }}</div>
+        <div v-if="!isGuideIntroState" class="topbar-subtitle">
+          {{ currentProjectDateLabel }}
+        </div>
       </div>
 
       <div class="topbar-right">
         <template v-if="!isGuideIntroState">
-          <button class="topbar-save-button" type="button" @click="saveCurrentProject">Save</button>
+          <button
+            class="topbar-save-button"
+            type="button"
+            @click="saveCurrentProject"
+          >
+            Save
+          </button>
           <button
             v-if="clickStreamActive"
             class="status-button"
@@ -944,7 +1116,7 @@ onUnmounted(() => {
               :disabled="workbench.isExporting"
               @click="exportCurrentProject()"
             >
-              {{ workbench.isExporting ? "Exporting..." : "Export HTML" }}
+              {{ workbench.isExporting ? 'Exporting...' : 'Export HTML' }}
             </button>
             <button
               class="export-button export-button--toggle"
@@ -956,18 +1128,32 @@ onUnmounted(() => {
             </button>
 
             <div v-if="exportMenuOpen" class="export-menu">
-              <button type="button" @click="exportCurrentProject()">Export HTML</button>
-              <button type="button" :disabled="previewLoading" @click="openPreview()">
-                {{ previewLoading ? "Loading preview..." : "Preview HTML" }}
+              <button type="button" @click="exportCurrentProject()">
+                Export HTML
               </button>
-              <button type="button" :disabled="!workbench.lastExportResult" @click="openLastExport()">
+              <button
+                type="button"
+                :disabled="previewLoading"
+                @click="openPreview()"
+              >
+                {{ previewLoading ? 'Loading preview...' : 'Preview HTML' }}
+              </button>
+              <button
+                type="button"
+                :disabled="!workbench.lastExportResult"
+                @click="openLastExport()"
+              >
                 Open last export
               </button>
             </div>
           </div>
 
           <div class="zoom-control">
-            <button class="zoom-button" type="button" @click="zoomMenuOpen = !zoomMenuOpen">
+            <button
+              class="zoom-button"
+              type="button"
+              @click="zoomMenuOpen = !zoomMenuOpen"
+            >
               <span>{{ zoomLabel }}</span>
               <span class="zoom-button__arrow">▾</span>
             </button>
@@ -987,7 +1173,10 @@ onUnmounted(() => {
                 :key="preset"
                 type="button"
                 class="zoom-option"
-                :class="{ 'zoom-option--active': zoomMode === 'manual' && manualZoom === preset }"
+                :class="{
+                  'zoom-option--active':
+                    zoomMode === 'manual' && manualZoom === preset,
+                }"
                 @click="setZoomPreset(preset)"
               >
                 {{ preset }}%
@@ -1004,26 +1193,60 @@ onUnmounted(() => {
       <aside class="menu-drawer" @click.stop>
         <div class="menu-drawer__header">
           <strong>Menu</strong>
-          <button class="chrome-icon-button" type="button" @click="menuOpen = false">✕</button>
+          <button
+            class="chrome-icon-button"
+            type="button"
+            @click="menuOpen = false"
+          >
+            ✕
+          </button>
         </div>
 
         <div class="menu-drawer__group">
-          <button class="menu-item" type="button" @click="openGuidesHome">Home</button>
-          <button class="menu-item" type="button" @click="openRecorderLab">Recorder</button>
-          <button class="menu-item" type="button" @click="saveCurrentProject(); menuOpen = false">
+          <button class="menu-item" type="button" @click="openGuidesHome">
+            Home
+          </button>
+          <button class="menu-item" type="button" @click="openRecorderLab">
+            Recorder
+          </button>
+          <button
+            class="menu-item"
+            type="button"
+            @click="
+              saveCurrentProject();
+              menuOpen = false;
+            "
+          >
             Save
           </button>
-          <button class="menu-item" type="button" @click="openPreview(); menuOpen = false">
+          <button
+            class="menu-item"
+            type="button"
+            @click="
+              openPreview();
+              menuOpen = false;
+            "
+          >
             Preview HTML
           </button>
-          <button class="menu-item menu-item--accent" type="button" @click="exportCurrentProject(); menuOpen = false">
+          <button
+            class="menu-item menu-item--accent"
+            type="button"
+            @click="
+              exportCurrentProject();
+              menuOpen = false;
+            "
+          >
             Export HTML
           </button>
           <button
             class="menu-item"
             type="button"
             :disabled="!workbench.lastExportResult"
-            @click="openLastExport(); menuOpen = false"
+            @click="
+              openLastExport();
+              menuOpen = false;
+            "
           >
             Open last export
           </button>
@@ -1031,9 +1254,13 @@ onUnmounted(() => {
 
         <div class="menu-drawer__group menu-drawer__group--muted">
           <button class="menu-item" type="button" disabled>Settings</button>
-          <button class="menu-item" type="button" disabled>Suggest a feature</button>
+          <button class="menu-item" type="button" disabled>
+            Suggest a feature
+          </button>
           <button class="menu-item" type="button" disabled>Online Help</button>
-          <button class="menu-item" type="button" disabled>Check for updates</button>
+          <button class="menu-item" type="button" disabled>
+            Check for updates
+          </button>
         </div>
 
         <div class="menu-drawer__footer">
@@ -1050,7 +1277,9 @@ onUnmounted(() => {
         <input
           class="guide-intro__name"
           :value="currentProject.name"
-          @input="updateIntroGuideName(($event.target as HTMLInputElement).value)"
+          @input="
+            updateIntroGuideName(($event.target as HTMLInputElement).value)
+          "
         />
 
         <p
@@ -1058,7 +1287,7 @@ onUnmounted(() => {
           :class="{
             'guide-intro__status--warning': introStatusTone === 'warning',
             'guide-intro__status--danger': introStatusTone === 'danger',
-            'guide-intro__status--active': introStatusTone === 'active'
+            'guide-intro__status--active': introStatusTone === 'active',
           }"
         >
           {{ introStatusText }}
@@ -1086,7 +1315,11 @@ onUnmounted(() => {
           >
             Stop click capture
           </button>
-          <button class="secondary-button" type="button" @click="workbench.refreshPermissions()">
+          <button
+            class="secondary-button"
+            type="button"
+            @click="workbench.refreshPermissions()"
+          >
             Refresh permissions
           </button>
         </div>
@@ -1094,7 +1327,10 @@ onUnmounted(() => {
     </section>
 
     <section v-else class="editor-body" :style="editorBodyStyle">
-      <aside class="steps-panel" :class="{ 'steps-panel--collapsed': leftCollapsed }">
+      <aside
+        class="steps-panel"
+        :class="{ 'steps-panel--collapsed': leftCollapsed }"
+      >
         <button
           v-if="leftCollapsed"
           class="panel-edge-toggle panel-edge-toggle--left"
@@ -1132,23 +1368,49 @@ onUnmounted(() => {
               <span>{{ steps.length }}</span>
             </div>
 
-            <button class="collapse-trigger" type="button" @click="leftCollapsed = true">‹</button>
+            <button
+              class="collapse-trigger"
+              type="button"
+              @click="leftCollapsed = true"
+            >
+              ‹
+            </button>
           </div>
 
           <div class="steps-actions add-step-anchor">
-            <button class="add-step-button" type="button" @click="addStepMenuOpen = !addStepMenuOpen">
+            <button
+              class="add-step-button"
+              type="button"
+              @click="addStepMenuOpen = !addStepMenuOpen"
+            >
               <span>＋</span>
               <span>Add Step</span>
             </button>
 
-            <button class="ghost-icon-button" type="button" title="More actions">⋯</button>
+            <button
+              class="ghost-icon-button"
+              type="button"
+              title="More actions"
+            >
+              ⋯
+            </button>
 
             <div v-if="addStepMenuOpen" class="add-step-menu">
-              <button type="button" @click="runAddStepAction('click-capture')">Capture screenshots with mouse clicks</button>
-              <button type="button" @click="runAddStepAction('simple-capture')">Take simple screenshot</button>
-              <button type="button" @click="runAddStepAction('import-images')">Import any images as new steps</button>
-              <button type="button" @click="runAddStepAction('empty-step')">Empty step</button>
-              <button type="button" @click="runAddStepAction('content-block')">Content block</button>
+              <button type="button" @click="runAddStepAction('click-capture')">
+                Capture screenshots with mouse clicks
+              </button>
+              <button type="button" @click="runAddStepAction('simple-capture')">
+                Take simple screenshot
+              </button>
+              <button type="button" @click="runAddStepAction('import-images')">
+                Import any images as new steps
+              </button>
+              <button type="button" @click="runAddStepAction('empty-step')">
+                Empty step
+              </button>
+              <button type="button" @click="runAddStepAction('content-block')">
+                Content block
+              </button>
             </div>
           </div>
 
@@ -1166,34 +1428,73 @@ onUnmounted(() => {
               :data-step-id="step.id"
               :class="{
                 'step-card--active': selectedStep?.id === step.id,
-                'step-card--compact': !stepsListGridView
+                'step-card--compact': !stepsListGridView,
               }"
               @click="selectStep(step.id)"
             >
               <div v-if="stepsListGridView" class="step-card__thumb">
-                <img v-if="step.asset" :src="resolveAssetUrl(step.asset)" :alt="step.title" />
-                <div v-else class="step-card__thumb-empty">{{ step.kind === "content" ? "Text" : "No image" }}</div>
-                <span v-if="step.stepNumber" class="step-card__badge">{{ step.stepNumber }}</span>
-                <span v-if="step.clickIndex" class="step-card__click">#{{ step.clickIndex }}</span>
+                <img
+                  v-if="step.asset"
+                  :src="resolveAssetUrl(step.asset)"
+                  :alt="step.title"
+                />
+                <div v-else class="step-card__thumb-empty">
+                  {{ step.kind === 'content' ? 'Text' : 'No image' }}
+                </div>
+                <span v-if="step.stepNumber" class="step-card__badge">{{
+                  step.stepNumber
+                }}</span>
+                <span v-if="step.clickIndex" class="step-card__click"
+                  >#{{ step.clickIndex }}</span
+                >
               </div>
 
               <div class="step-card__body">
                 <div class="step-card__title-row">
                   <div class="step-card__title-row-main">
-                    <span v-if="!stepsListGridView && step.stepNumber" class="step-card__inline-badge">
+                    <span
+                      v-if="!stepsListGridView && step.stepNumber"
+                      class="step-card__inline-badge"
+                    >
                       {{ step.stepNumber }}
                     </span>
-                    <div class="step-card__title">{{ step.title || "Untitled step" }}</div>
+                    <div class="step-card__title">
+                      {{ step.title || 'Untitled step' }}
+                    </div>
                   </div>
                   <div class="step-card__menu-wrap">
-                    <button class="step-card__menu-button" type="button" @click.stop="toggleStepMenu(step.id)">
+                    <button
+                      class="step-card__menu-button"
+                      type="button"
+                      @click.stop="toggleStepMenu(step.id)"
+                    >
                       ⋯
                     </button>
 
-                    <div v-if="stepMenuOpenId === step.id" class="step-card__menu" @click.stop>
-                      <button type="button" @click="insertStepRelative(step, 'before')">Insert above</button>
-                      <button type="button" @click="insertStepRelative(step, 'after')">Insert below</button>
-                      <button type="button" :disabled="steps[0]?.id === step.id" @click="moveStepCard(step, 'up')">Move up</button>
+                    <div
+                      v-if="stepMenuOpenId === step.id"
+                      class="step-card__menu"
+                      @click.stop
+                    >
+                      <button
+                        type="button"
+                        @click="insertStepRelative(step, 'before')"
+                      >
+                        Insert above
+                      </button>
+                      <button
+                        type="button"
+                        @click="insertStepRelative(step, 'after')"
+                      >
+                        Insert below
+                      </button>
+                      <button
+                        type="button"
+                        :disabled="steps[0]?.id === step.id"
+                        @click="moveStepCard(step, 'up')"
+                      >
+                        Move up
+                      </button>
                       <button
                         type="button"
                         :disabled="steps[steps.length - 1]?.id === step.id"
@@ -1201,8 +1502,16 @@ onUnmounted(() => {
                       >
                         Move down
                       </button>
-                      <button type="button" @click="duplicateStepCard(step)">Duplicate</button>
-                      <button class="step-card__menu-danger" type="button" @click="removeStepCard(step)">Delete</button>
+                      <button type="button" @click="duplicateStepCard(step)">
+                        Duplicate
+                      </button>
+                      <button
+                        class="step-card__menu-danger"
+                        type="button"
+                        @click="removeStepCard(step)"
+                      >
+                        Delete
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -1246,30 +1555,68 @@ onUnmounted(() => {
         <div class="workspace-toolbar">
           <div class="workspace-toolbar__group">
             <div class="image-actions-menu-wrap">
-              <button class="toolbar-button" type="button" @click="imageActionsMenuOpen = !imageActionsMenuOpen">
+              <button
+                class="toolbar-button"
+                type="button"
+                @click="imageActionsMenuOpen = !imageActionsMenuOpen"
+              >
                 Step image actions
               </button>
 
               <div v-if="imageActionsMenuOpen" class="toolbar-menu" @click.stop>
-                <button type="button" @click="runStepImageAction('capture')">Capture current screen</button>
-                <button type="button" @click="runStepImageAction('capture-area')">Capture selected area</button>
-                <button type="button" @click="runStepImageAction('import')">Import images as steps</button>
-                <button type="button" :disabled="!selectedStepAsset" @click="runStepImageAction('reveal')">Open current screenshot</button>
+                <button type="button" @click="runStepImageAction('capture')">
+                  Capture current screen
+                </button>
+                <button
+                  type="button"
+                  @click="runStepImageAction('capture-area')"
+                >
+                  Capture selected area
+                </button>
+                <button type="button" @click="runStepImageAction('import')">
+                  Import images as steps
+                </button>
+                <button
+                  type="button"
+                  :disabled="!selectedStepAsset"
+                  @click="runStepImageAction('reveal')"
+                >
+                  Open current screenshot
+                </button>
               </div>
             </div>
 
-            <button class="toolbar-button" type="button" :disabled="!selectedStepAsset" @click="exportSelectedImage()">
+            <button
+              class="toolbar-button"
+              type="button"
+              :disabled="!selectedStepAsset"
+              @click="exportSelectedImage()"
+            >
               Export image
             </button>
           </div>
 
           <div class="workspace-toolbar__group workspace-toolbar__group--right">
-            <div class="workspace-save-message">{{ workbench.saveMessage }}</div>
-            <button class="focused-pill" type="button" @click="toggleFocusedView()">
-              <span class="focused-pill__dot" :class="{ 'focused-pill__dot--off': !focusedViewEnabled }"></span>
+            <div class="workspace-save-message">
+              {{ workbench.saveMessage }}
+            </div>
+            <button
+              class="focused-pill"
+              type="button"
+              @click="toggleFocusedView()"
+            >
+              <span
+                class="focused-pill__dot"
+                :class="{ 'focused-pill__dot--off': !focusedViewEnabled }"
+              ></span>
               <span>Focused view</span>
             </button>
-            <button class="toolbar-button toolbar-button--danger" type="button" :disabled="!selectedAnnotation" @click="removeSelectedAnnotation()">
+            <button
+              class="toolbar-button toolbar-button--danger"
+              type="button"
+              :disabled="!selectedAnnotation"
+              @click="removeSelectedAnnotation()"
+            >
               Delete annotation
             </button>
           </div>
@@ -1277,8 +1624,14 @@ onUnmounted(() => {
 
         <div class="workspace-meta">
           <div class="workspace-meta__left">
-            <strong>{{ clickStreamActive ? `Click capture ${workbench.clickStreamStatus}` : activeToolMeta.label }}</strong>
-            <span>{{ clickStreamActive ? clickProgressText : activeToolMeta.hint }}</span>
+            <strong>{{
+              clickStreamActive
+                ? `Click capture ${workbench.clickStreamStatus}`
+                : activeToolMeta.label
+            }}</strong>
+            <span>{{
+              clickStreamActive ? clickProgressText : activeToolMeta.hint
+            }}</span>
           </div>
 
           <div class="workspace-meta__right">
@@ -1311,23 +1664,44 @@ onUnmounted(() => {
                   <button
                     class="stage-controls__toggle"
                     type="button"
-                    :class="{ 'stage-controls__toggle--active': focusedViewEnabled }"
+                    :class="{
+                      'stage-controls__toggle--active': focusedViewEnabled,
+                    }"
                     @click="toggleFocusedView()"
                   >
                     Focused view
                   </button>
 
                   <div class="stage-controls__meta">
-                    <button class="stage-controls__icon" type="button" @click="nudgeZoom('out')">−</button>
-                    <button class="stage-controls__button" type="button" @click="setZoomPreset('fit')">
+                    <button
+                      class="stage-controls__icon"
+                      type="button"
+                      @click="nudgeZoom('out')"
+                    >
+                      −
+                    </button>
+                    <button
+                      class="stage-controls__button"
+                      type="button"
+                      @click="setZoomPreset('fit')"
+                    >
                       Auto fit
                     </button>
                     <span>{{ zoomLabel }}</span>
-                    <button class="stage-controls__icon" type="button" @click="nudgeZoom('in')">＋</button>
+                    <button
+                      class="stage-controls__icon"
+                      type="button"
+                      @click="nudgeZoom('in')"
+                    >
+                      ＋
+                    </button>
                   </div>
                 </div>
 
-                <div class="stage-surface" :class="{ 'stage-surface--focused': focusedViewEnabled }">
+                <div
+                  class="stage-surface"
+                  :class="{ 'stage-surface--focused': focusedViewEnabled }"
+                >
                   <ScreenshotAnnotator
                     v-if="selectedStep?.asset"
                     :image-src="selectedStepAssetUrl"
@@ -1339,15 +1713,22 @@ onUnmounted(() => {
                     :active-tool="activeTool === 'ocr' ? 'select' : activeTool"
                     @update:annotations="updateSelectedAnnotations"
                     @update:selected-id="selectedAnnotationId = $event"
+                    @update:active-tool="activeTool = $event"
                     @request:crop="handleCropRequest"
                   />
 
                   <div v-else class="stage-empty">
-                    <strong>{{ selectedStep?.kind === "content" ? "Content block selected" : "No screenshot yet" }}</strong>
+                    <strong>{{
+                      selectedStep?.kind === 'content'
+                        ? 'Content block selected'
+                        : 'No screenshot yet'
+                    }}</strong>
                     <span>
-                      {{ selectedStep?.kind === "content"
-                        ? "这个步骤当前是纯文本内容块。"
-                        : "为这个步骤抓图或导入图片后，中间画布才会显示。" }}
+                      {{
+                        selectedStep?.kind === 'content'
+                          ? '这个步骤当前是纯文本内容块。'
+                          : '为这个步骤抓图或导入图片后，中间画布才会显示。'
+                      }}
                     </span>
                   </div>
                 </div>
@@ -1360,9 +1741,11 @@ onUnmounted(() => {
           <div class="ocr-footer__message">
             <strong>OCR</strong>
             <span>
-              {{ workbench.ocrBusy
-                ? "识别进行中，首次加载语言包会慢一些。"
-                : "提取当前截图文字，并自动复制结果到剪贴板。" }}
+              {{
+                workbench.ocrBusy
+                  ? '识别进行中，首次加载语言包会慢一些。'
+                  : '提取当前截图文字，并自动复制结果到剪贴板。'
+              }}
             </span>
           </div>
 
@@ -1370,7 +1753,11 @@ onUnmounted(() => {
             <select
               class="ocr-footer__select"
               :value="workbench.ocrLanguage"
-              @change="workbench.setOcrLanguage(($event.target as HTMLSelectElement).value)"
+              @change="
+                workbench.setOcrLanguage(
+                  ($event.target as HTMLSelectElement).value
+                )
+              "
             >
               <option
                 v-for="language in workbench.ocrLanguageOptions"
@@ -1387,12 +1774,16 @@ onUnmounted(() => {
               :disabled="!selectedStep?.asset || workbench.ocrBusy"
               @click="runFullStepOcr()"
             >
-              {{ workbench.ocrBusy ? "Recognizing..." : "Recognize full step" }}
+              {{ workbench.ocrBusy ? 'Recognizing...' : 'Recognize full step' }}
             </button>
             <button
               class="secondary-button"
               type="button"
-              :disabled="!selectedStep?.asset || !selectedAnnotationSelection || workbench.ocrBusy"
+              :disabled="
+                !selectedStep?.asset ||
+                !selectedAnnotationSelection ||
+                workbench.ocrBusy
+              "
               @click="runSelectedAreaOcr()"
             >
               Recognize selected area
@@ -1405,7 +1796,13 @@ onUnmounted(() => {
             >
               Copy last result
             </button>
-            <button class="chrome-icon-button" type="button" @click="workbench.toggleOcr(false)">✕</button>
+            <button
+              class="chrome-icon-button"
+              type="button"
+              @click="workbench.toggleOcr(false)"
+            >
+              ✕
+            </button>
           </div>
 
           <div class="ocr-footer__result">
@@ -1425,7 +1822,10 @@ onUnmounted(() => {
         </div>
       </main>
 
-      <aside class="details-panel" :class="{ 'details-panel--collapsed': rightCollapsed }">
+      <aside
+        class="details-panel"
+        :class="{ 'details-panel--collapsed': rightCollapsed }"
+      >
         <button
           v-if="rightCollapsed"
           class="panel-edge-toggle panel-edge-toggle--right"
@@ -1438,16 +1838,26 @@ onUnmounted(() => {
         <template v-else>
           <div class="panel-header">
             <div>
-              <strong>{{ selectedStep ? "Step Details" : "Guide Details" }}</strong>
-              <p>{{ selectedStep ? stepCounterLabel : "Guide settings" }}</p>
+              <strong>{{
+                selectedStep ? 'Step Details' : 'Guide Details'
+              }}</strong>
+              <p>{{ selectedStep ? stepCounterLabel : 'Guide settings' }}</p>
             </div>
 
-            <button class="collapse-trigger" type="button" @click="rightCollapsed = true">›</button>
+            <button
+              class="collapse-trigger"
+              type="button"
+              @click="rightCollapsed = true"
+            >
+              ›
+            </button>
           </div>
 
           <div v-if="selectedStep" class="details-body">
             <div class="details-body__hero">
-              <button class="details-settings-button" type="button">Step settings</button>
+              <button class="details-settings-button" type="button">
+                Step settings
+              </button>
               <span>{{ stepCounterLabel }}</span>
             </div>
 
@@ -1465,7 +1875,11 @@ onUnmounted(() => {
                   <textarea
                     rows="3"
                     :value="selectedAnnotation.text ?? ''"
-                    @input="updateSelectedAnnotationPatch({ text: ($event.target as HTMLTextAreaElement).value })"
+                    @input="
+                      updateSelectedAnnotationPatch({
+                        text: ($event.target as HTMLTextAreaElement).value,
+                      })
+                    "
                   />
                 </label>
 
@@ -1475,7 +1889,11 @@ onUnmounted(() => {
                     <input
                       type="color"
                       :value="selectedAnnotation.color ?? '#f2b91f'"
-                      @input="updateSelectedAnnotationPatch({ color: ($event.target as HTMLInputElement).value })"
+                      @input="
+                        updateSelectedAnnotationPatch({
+                          color: ($event.target as HTMLInputElement).value,
+                        })
+                      "
                     />
                   </label>
 
@@ -1486,7 +1904,12 @@ onUnmounted(() => {
                       min="1"
                       max="16"
                       :value="selectedAnnotation.strokeWidth ?? 3"
-                      @input="updateSelectedAnnotationNumberField('strokeWidth', ($event.target as HTMLInputElement).value)"
+                      @input="
+                        updateSelectedAnnotationNumberField(
+                          'strokeWidth',
+                          ($event.target as HTMLInputElement).value
+                        )
+                      "
                     />
                   </label>
 
@@ -1494,8 +1917,16 @@ onUnmounted(() => {
                     <span>Fill color</span>
                     <input
                       type="color"
-                      :value="selectedAnnotation.fillColor?.startsWith('#') ? selectedAnnotation.fillColor : '#f2b91f'"
-                      @input="updateSelectedAnnotationPatch({ fillColor: ($event.target as HTMLInputElement).value })"
+                      :value="
+                        selectedAnnotation.fillColor?.startsWith('#')
+                          ? selectedAnnotation.fillColor
+                          : '#f2b91f'
+                      "
+                      @input="
+                        updateSelectedAnnotationPatch({
+                          fillColor: ($event.target as HTMLInputElement).value,
+                        })
+                      "
                     />
                   </label>
 
@@ -1507,7 +1938,12 @@ onUnmounted(() => {
                       max="1"
                       step="0.05"
                       :value="selectedAnnotation.opacity ?? 1"
-                      @input="updateSelectedAnnotationNumberField('opacity', ($event.target as HTMLInputElement).value)"
+                      @input="
+                        updateSelectedAnnotationNumberField(
+                          'opacity',
+                          ($event.target as HTMLInputElement).value
+                        )
+                      "
                     />
                   </label>
 
@@ -1516,7 +1952,11 @@ onUnmounted(() => {
                     <input
                       type="color"
                       :value="selectedAnnotation.textColor ?? '#ffffff'"
-                      @input="updateSelectedAnnotationPatch({ textColor: ($event.target as HTMLInputElement).value })"
+                      @input="
+                        updateSelectedAnnotationPatch({
+                          textColor: ($event.target as HTMLInputElement).value,
+                        })
+                      "
                     />
                   </label>
 
@@ -1527,22 +1967,78 @@ onUnmounted(() => {
                       min="10"
                       max="64"
                       :value="selectedAnnotation.fontSize ?? 16"
-                      @input="updateSelectedAnnotationNumberField('fontSize', ($event.target as HTMLInputElement).value)"
+                      @input="
+                        updateSelectedAnnotationNumberField(
+                          'fontSize',
+                          ($event.target as HTMLInputElement).value
+                        )
+                      "
                     />
                   </label>
 
-                  <label v-if="selectedAnnotation.type !== 'click' && selectedAnnotation.type !== 'line' && selectedAnnotation.type !== 'arrow' && selectedAnnotation.type !== 'brush'" class="field">
+                  <label v-if="annotationSupportsText" class="field">
+                    <span>Font weight</span>
+                    <select
+                      :value="selectedAnnotation.fontWeight ?? 700"
+                      @change="
+                        updateSelectedAnnotationNumberField(
+                          'fontWeight',
+                          ($event.target as HTMLSelectElement).value
+                        )
+                      "
+                    >
+                      <option value="400">Regular</option>
+                      <option value="500">Medium</option>
+                      <option value="600">Semibold</option>
+                      <option value="700">Bold</option>
+                    </select>
+                  </label>
+
+                  <label v-if="annotationSupportsText" class="field">
+                    <span>Text align</span>
+                    <select
+                      :value="selectedAnnotation.textAlign ?? 'left'"
+                      @change="
+                        updateSelectedAnnotationPatch({
+                          textAlign: ($event.target as HTMLSelectElement)
+                            .value as 'left' | 'center' | 'right',
+                        })
+                      "
+                    >
+                      <option value="left">Left</option>
+                      <option value="center">Center</option>
+                      <option value="right">Right</option>
+                    </select>
+                  </label>
+
+                  <label
+                    v-if="
+                      selectedAnnotation.type !== 'click' &&
+                      selectedAnnotation.type !== 'line' &&
+                      selectedAnnotation.type !== 'arrow' &&
+                      selectedAnnotation.type !== 'brush'
+                    "
+                    class="field"
+                  >
                     <span>Radius</span>
                     <input
                       type="number"
                       min="0"
                       max="999"
                       :value="selectedAnnotation.radius ?? 10"
-                      @input="updateSelectedAnnotationNumberField('radius', ($event.target as HTMLInputElement).value)"
+                      @input="
+                        updateSelectedAnnotationNumberField(
+                          'radius',
+                          ($event.target as HTMLInputElement).value
+                        )
+                      "
                     />
                   </label>
 
-                  <label v-if="selectedAnnotation.type === 'magnify'" class="field">
+                  <label
+                    v-if="selectedAnnotation.type === 'magnify'"
+                    class="field"
+                  >
                     <span>Zoom</span>
                     <input
                       type="number"
@@ -1550,52 +2046,108 @@ onUnmounted(() => {
                       max="4"
                       step="0.1"
                       :value="selectedAnnotation.magnifyZoom ?? 1.8"
-                      @input="updateSelectedAnnotationNumberField('magnifyZoom', ($event.target as HTMLInputElement).value)"
+                      @input="
+                        updateSelectedAnnotationNumberField(
+                          'magnifyZoom',
+                          ($event.target as HTMLInputElement).value
+                        )
+                      "
                     />
                   </label>
 
-                  <label v-if="selectedAnnotation.type === 'blur'" class="field">
+                  <label
+                    v-if="selectedAnnotation.type === 'blur'"
+                    class="field"
+                  >
                     <span>Blur amount</span>
                     <input
                       type="number"
                       min="2"
                       max="30"
                       :value="selectedAnnotation.blurAmount ?? 12"
-                      @input="updateSelectedAnnotationNumberField('blurAmount', ($event.target as HTMLInputElement).value)"
+                      @input="
+                        updateSelectedAnnotationNumberField(
+                          'blurAmount',
+                          ($event.target as HTMLInputElement).value
+                        )
+                      "
                     />
                   </label>
 
-                  <label v-if="selectedAnnotation.type === 'cursor' || selectedAnnotation.type === 'click'" class="field">
+                  <label
+                    v-if="
+                      selectedAnnotation.type === 'cursor' ||
+                      selectedAnnotation.type === 'click'
+                    "
+                    class="field"
+                  >
                     <span>Cursor</span>
                     <select
                       :value="selectedAnnotation.cursorVariant ?? 'pointer'"
-                      @change="updateSelectedAnnotationPatch({ cursorVariant: ($event.target as HTMLSelectElement).value as AnnotationCursorVariant })"
+                      @change="
+                        updateSelectedAnnotationPatch({
+                          cursorVariant: ($event.target as HTMLSelectElement)
+                            .value as AnnotationCursorVariant,
+                        })
+                      "
                     >
-                      <option v-for="variant in CURSOR_VARIANTS" :key="variant.value" :value="variant.value">
+                      <option
+                        v-for="variant in CURSOR_VARIANTS"
+                        :key="variant.value"
+                        :value="variant.value"
+                      >
                         {{ variant.label }}
                       </option>
                     </select>
                   </label>
 
-                  <label v-if="selectedAnnotation.type === 'tooltip'" class="field">
+                  <label
+                    v-if="selectedAnnotation.type === 'tooltip'"
+                    class="field"
+                  >
                     <span>Placement</span>
                     <select
                       :value="selectedAnnotation.tooltipPlacement ?? 'bottom'"
-                      @change="updateSelectedAnnotationPatch({ tooltipPlacement: ($event.target as HTMLSelectElement).value as AnnotationTooltipPlacement })"
+                      @change="
+                        updateSelectedAnnotationPatch({
+                          tooltipPlacement: ($event.target as HTMLSelectElement)
+                            .value as AnnotationTooltipPlacement,
+                        })
+                      "
                     >
-                      <option v-for="placement in TOOLTIP_PLACEMENTS" :key="placement.value" :value="placement.value">
+                      <option
+                        v-for="placement in TOOLTIP_PLACEMENTS"
+                        :key="placement.value"
+                        :value="placement.value"
+                      >
                         {{ placement.label }}
                       </option>
                     </select>
                   </label>
 
-                  <label v-if="selectedAnnotation.type === 'line' || selectedAnnotation.type === 'arrow' || selectedAnnotation.type === 'brush'" class="field">
+                  <label
+                    v-if="
+                      selectedAnnotation.type === 'line' ||
+                      selectedAnnotation.type === 'arrow' ||
+                      selectedAnnotation.type === 'brush'
+                    "
+                    class="field"
+                  >
                     <span>Line style</span>
                     <select
                       :value="selectedAnnotation.lineStyle ?? 'solid'"
-                      @change="updateSelectedAnnotationPatch({ lineStyle: ($event.target as HTMLSelectElement).value as AnnotationLineStyle })"
+                      @change="
+                        updateSelectedAnnotationPatch({
+                          lineStyle: ($event.target as HTMLSelectElement)
+                            .value as AnnotationLineStyle,
+                        })
+                      "
                     >
-                      <option v-for="style in LINE_STYLE_OPTIONS" :key="style.value" :value="style.value">
+                      <option
+                        v-for="style in LINE_STYLE_OPTIONS"
+                        :key="style.value"
+                        :value="style.value"
+                      >
                         {{ style.label }}
                       </option>
                     </select>
@@ -1604,8 +2156,15 @@ onUnmounted(() => {
                   <label v-if="annotationSupportsShadow" class="field">
                     <span>Shadow</span>
                     <select
-                      :value="selectedAnnotation.shadow === false ? 'off' : 'on'"
-                      @change="updateSelectedAnnotationPatch({ shadow: ($event.target as HTMLSelectElement).value === 'on' })"
+                      :value="
+                        selectedAnnotation.shadow === false ? 'off' : 'on'
+                      "
+                      @change="
+                        updateSelectedAnnotationPatch({
+                          shadow:
+                            ($event.target as HTMLSelectElement).value === 'on',
+                        })
+                      "
                     >
                       <option value="on">On</option>
                       <option value="off">Off</option>
@@ -1635,36 +2194,69 @@ onUnmounted(() => {
                   ></button>
                 </div>
 
-                <div v-if="annotationSupportsArrowHeads" class="annotation-toggle-grid">
+                <div
+                  v-if="annotationSupportsArrowHeads"
+                  class="annotation-toggle-grid"
+                >
                   <label class="toggle-row">
                     <input
                       type="checkbox"
                       :checked="selectedAnnotation.showArrowHeadStart ?? false"
-                      @change="updateSelectedAnnotationPatch({ showArrowHeadStart: ($event.target as HTMLInputElement).checked })"
+                      @change="
+                        updateSelectedAnnotationPatch({
+                          showArrowHeadStart: (
+                            $event.target as HTMLInputElement
+                          ).checked,
+                        })
+                      "
                     />
                     <span>Arrow head at start</span>
                   </label>
                   <label class="toggle-row">
                     <input
                       type="checkbox"
-                      :checked="selectedAnnotation.showArrowHeadEnd ?? (selectedAnnotation.type === 'arrow')"
-                      @change="updateSelectedAnnotationPatch({ showArrowHeadEnd: ($event.target as HTMLInputElement).checked })"
+                      :checked="
+                        selectedAnnotation.showArrowHeadEnd ??
+                        selectedAnnotation.type === 'arrow'
+                      "
+                      @change="
+                        updateSelectedAnnotationPatch({
+                          showArrowHeadEnd: ($event.target as HTMLInputElement)
+                            .checked,
+                        })
+                      "
                     />
                     <span>Arrow head at end</span>
                   </label>
                 </div>
 
                 <div class="annotation-layer-actions">
-                  <button class="secondary-button" type="button" @click="moveSelectedAnnotationLayer('back')">
+                  <button
+                    class="secondary-button"
+                    type="button"
+                    @click="moveSelectedAnnotationLayer('back')"
+                  >
                     Send to back
                   </button>
-                  <button class="secondary-button" type="button" @click="moveSelectedAnnotationLayer('backward')">
+                  <button
+                    class="secondary-button"
+                    type="button"
+                    @click="moveSelectedAnnotationLayer('backward')"
+                  >
                     Send backward
                   </button>
-                  <button class="secondary-button" type="button" @click="moveSelectedAnnotationLayer('forward')">
+                  <button
+                    class="secondary-button"
+                    type="button"
+                    @click="moveSelectedAnnotationLayer('forward')"
+                  >
                     Bring forward
                   </button>
-                  <button class="secondary-button" type="button" @click="moveSelectedAnnotationLayer('front')">
+                  <button
+                    class="secondary-button"
+                    type="button"
+                    @click="moveSelectedAnnotationLayer('front')"
+                  >
                     Bring to front
                   </button>
                 </div>
@@ -1678,7 +2270,12 @@ onUnmounted(() => {
                 <span>Status</span>
                 <select
                   :value="selectedStep.status ?? 'default'"
-                  @change="updateSelectedStep({ status: ($event.target as HTMLSelectElement).value as StepStatus })"
+                  @change="
+                    updateSelectedStep({
+                      status: ($event.target as HTMLSelectElement)
+                        .value as StepStatus,
+                    })
+                  "
                 >
                   <option value="default">Default</option>
                   <option value="completed">Completed</option>
@@ -1691,7 +2288,12 @@ onUnmounted(() => {
                 <span>Step type</span>
                 <select
                   :value="selectedStep.kind"
-                  @change="updateSelectedStep({ kind: ($event.target as HTMLSelectElement).value as StepDraft['kind'] })"
+                  @change="
+                    updateSelectedStep({
+                      kind: ($event.target as HTMLSelectElement)
+                        .value as StepDraft['kind'],
+                    })
+                  "
                 >
                   <option value="action">Action</option>
                   <option value="note">Note</option>
@@ -1704,7 +2306,14 @@ onUnmounted(() => {
             <section class="detail-section">
               <div class="detail-section__title">Title</div>
               <label class="field">
-                <input :value="selectedStep.title" @input="updateSelectedStep({ title: ($event.target as HTMLInputElement).value })" />
+                <input
+                  :value="selectedStep.title"
+                  @input="
+                    updateSelectedStep({
+                      title: ($event.target as HTMLInputElement).value,
+                    })
+                  "
+                />
               </label>
             </section>
 
@@ -1722,7 +2331,15 @@ onUnmounted(() => {
                 <input
                   type="checkbox"
                   :checked="selectedStep.settings?.forceNewPage ?? false"
-                  @change="updateSelectedStep({ settings: { ...getCompleteStepSettings(selectedStep), forceNewPage: ($event.target as HTMLInputElement).checked } })"
+                  @change="
+                    updateSelectedStep({
+                      settings: {
+                        ...getCompleteStepSettings(selectedStep),
+                        forceNewPage: ($event.target as HTMLInputElement)
+                          .checked,
+                      },
+                    })
+                  "
                 />
                 <span>Force new page</span>
               </label>
@@ -1731,21 +2348,51 @@ onUnmounted(() => {
                 <input
                   type="checkbox"
                   :checked="selectedStep.settings?.showStepNumber ?? true"
-                  @change="updateSelectedStep({ settings: { ...getCompleteStepSettings(selectedStep), showStepNumber: ($event.target as HTMLInputElement).checked } })"
+                  @change="
+                    updateSelectedStep({
+                      settings: {
+                        ...getCompleteStepSettings(selectedStep),
+                        showStepNumber: ($event.target as HTMLInputElement)
+                          .checked,
+                      },
+                    })
+                  "
                 />
                 <span>Show step number</span>
               </label>
             </section>
 
             <section class="detail-actions">
-              <button class="secondary-button" type="button" :disabled="!canMoveStepUp" @click="moveSelectedStep('up')">
+              <button
+                class="secondary-button"
+                type="button"
+                :disabled="!canMoveStepUp"
+                @click="moveSelectedStep('up')"
+              >
                 Move Up
               </button>
-              <button class="secondary-button" type="button" :disabled="!canMoveStepDown" @click="moveSelectedStep('down')">
+              <button
+                class="secondary-button"
+                type="button"
+                :disabled="!canMoveStepDown"
+                @click="moveSelectedStep('down')"
+              >
                 Move Down
               </button>
-              <button class="secondary-button" type="button" @click="duplicateSelectedStep()">Duplicate</button>
-              <button class="danger-button" type="button" @click="removeSelectedStep()">Delete</button>
+              <button
+                class="secondary-button"
+                type="button"
+                @click="duplicateSelectedStep()"
+              >
+                Duplicate
+              </button>
+              <button
+                class="danger-button"
+                type="button"
+                @click="removeSelectedStep()"
+              >
+                Delete
+              </button>
             </section>
           </div>
 
@@ -1755,7 +2402,11 @@ onUnmounted(() => {
               <label class="field">
                 <input
                   :value="currentProject.name"
-                  @input="workbench.updateProjectMeta({ name: ($event.target as HTMLInputElement).value })"
+                  @input="
+                    workbench.updateProjectMeta({
+                      name: ($event.target as HTMLInputElement).value,
+                    })
+                  "
                 />
               </label>
             </section>
@@ -1766,7 +2417,11 @@ onUnmounted(() => {
                 <textarea
                   rows="6"
                   :value="currentProject.description"
-                  @input="workbench.updateProjectMeta({ description: ($event.target as HTMLTextAreaElement).value })"
+                  @input="
+                    workbench.updateProjectMeta({
+                      description: ($event.target as HTMLTextAreaElement).value,
+                    })
+                  "
                 />
               </label>
             </section>
@@ -1781,7 +2436,11 @@ onUnmounted(() => {
       </aside>
     </section>
 
-    <div v-if="previewOpen" class="preview-overlay" @click.self="previewOpen = false">
+    <div
+      v-if="previewOpen"
+      class="preview-overlay"
+      @click.self="previewOpen = false"
+    >
       <section class="preview-dialog">
         <header class="preview-dialog__header">
           <div>
@@ -1790,17 +2449,43 @@ onUnmounted(() => {
           </div>
 
           <div class="preview-dialog__actions">
-            <button class="secondary-button" type="button" @click="saveCurrentProject()">Save</button>
-            <button class="secondary-button" type="button" @click="exportCurrentProject()">Export HTML</button>
-            <button class="secondary-button" type="button" :disabled="!workbench.lastExportResult" @click="openLastExport()">
+            <button
+              class="secondary-button"
+              type="button"
+              @click="saveCurrentProject()"
+            >
+              Save
+            </button>
+            <button
+              class="secondary-button"
+              type="button"
+              @click="exportCurrentProject()"
+            >
+              Export HTML
+            </button>
+            <button
+              class="secondary-button"
+              type="button"
+              :disabled="!workbench.lastExportResult"
+              @click="openLastExport()"
+            >
               Open last export
             </button>
-            <button class="chrome-icon-button" type="button" @click="previewOpen = false">✕</button>
+            <button
+              class="chrome-icon-button"
+              type="button"
+              @click="previewOpen = false"
+            >
+              ✕
+            </button>
           </div>
         </header>
 
         <div class="preview-dialog__body">
-          <iframe class="preview-dialog__frame" :srcdoc="workbench.previewHtml"></iframe>
+          <iframe
+            class="preview-dialog__frame"
+            :srcdoc="workbench.previewHtml"
+          ></iframe>
         </div>
       </section>
     </div>
@@ -1810,8 +2495,12 @@ onUnmounted(() => {
 <style scoped>
 .editor-page {
   height: 100%;
-  background:
-    linear-gradient(180deg, rgba(248, 210, 100, 0.48) 0, rgba(248, 210, 100, 0.48) 30px, #f6f7f9 30px),
+  background: linear-gradient(
+      180deg,
+      rgba(248, 210, 100, 0.48) 0,
+      rgba(248, 210, 100, 0.48) 30px,
+      #f6f7f9 30px
+    ),
     #f6f7f9;
   color: #2b3139;
   display: grid;
@@ -1879,6 +2568,10 @@ onUnmounted(() => {
 
 .topbar-center {
   text-align: center;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
 }
 
 .topbar-title-row {
@@ -2130,7 +2823,9 @@ onUnmounted(() => {
 .editor-body {
   min-height: 0;
   display: grid;
-  grid-template-columns: var(--steps-width) 54px minmax(0, 1fr) var(--details-width);
+  grid-template-columns: var(--steps-width) 54px minmax(0, 1fr) var(
+      --details-width
+    );
   overflow: hidden;
 }
 
@@ -3202,7 +3897,9 @@ onUnmounted(() => {
   }
 
   .editor-body {
-    grid-template-columns: var(--steps-width) 50px minmax(0, 1fr) var(--details-width);
+    grid-template-columns: var(--steps-width) 50px minmax(0, 1fr) var(
+        --details-width
+      );
   }
 }
 
