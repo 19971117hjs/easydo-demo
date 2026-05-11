@@ -7,7 +7,11 @@ export function registerAppIpc(appUiService: AppUiService): void {
     name: app.getName(),
     version: app.getVersion(),
     platform: process.platform,
-    userDataPath: app.getPath("userData")
+    userDataPath: app.getPath("userData"),
+    isPackaged: app.isPackaged,
+    runtimeIdentity: app.getName(),
+    execPath: process.execPath,
+    appPath: app.getAppPath()
   }));
   ipcMain.handle("app:get-editor-ui-prefs", (): Promise<EditorUiPrefs> => appUiService.getEditorUiPrefs());
   ipcMain.handle(

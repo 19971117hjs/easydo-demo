@@ -1,6 +1,6 @@
 # easyDo 重建清单
 
-更新时间：2026-04-30
+更新时间：2026-05-11
 
 这份清单基于当前仓库真实状态整理，不按理想规划脑补。
 
@@ -9,7 +9,6 @@
 - [x] `Electron + Vue 3 + Pinia + typed IPC` 基础链路已打通
 - [x] 主进程 / preload / renderer 三层通信已具备可用骨架
 - [x] Recorder 核心录制主流程已打通
-- [x] `Create guide -> click capture -> 录制/暂停/恢复/结束 -> 进入编辑页` 主路径已可走通
 - [x] 区域选择、全屏、活动窗口三种 capture 模式已接入
 - [x] click stream 状态、进度、错误事件已接入 renderer
 - [x] 简单截图、区域截图入口已可用
@@ -21,12 +20,27 @@
 - [x] `Export HTML / Preview HTML / Open last export` 已可用
 - [x] OCR、裁切截图、导入标注资产能力已接入 Editor
 - [x] 已配置 mac 打包命令：`pnpm --dir /Users/jsh/Desktop/Folge_local_runtime/easydo dist:mac`
+- [x] mac 打包产物已改为 ad-hoc 重签，主 app / helper identity 已从 `Electron` 收敛为 `com.easydo.desktop*`
+- [x] Recorder / Editor 不再使用自定义 `canCaptureScreens` 作为录制入口硬拦截，改为按真实 capture 结果判定
+- [x] click capture handoff 失败时不再出现“主窗口已隐藏、overlay 也消失”的假退出状态
+- [x] native capture worker 已从不稳定 IPC 改为 `stdout` JSON 返回
+- [x] native capture worker 大图返回时序已修正：等待 `stdout` flush + 主进程监听 `close`
 - [x] 当前 `pnpm --dir /Users/jsh/Desktop/Folge_local_runtime/easydo typecheck` 可通过
 - [x] 当前 `pnpm --dir /Users/jsh/Desktop/Folge_local_runtime/easydo build` 可通过
+- [x] 当前 `pnpm --dir /Users/jsh/Desktop/Folge_local_runtime/easydo dist:mac` 可通过
 
 ## 待完成
 
-### P0：先把编辑器真正做稳
+### P0：先把 click capture parity 拉回真实可用
+
+- [ ] `Create guide -> click capture -> Continue -> Start capturing -> 连续点击 -> Pause/Resume -> Finish -> 进入编辑页` 仍需完成开发态 / 打包态双端实测闭环
+- [ ] 核实打包态下 `Start capturing` 之后是否已经能持续稳定进入真实点击录制，而不是只修通 handoff 与 worker 通信
+- [ ] 核实 click stream 在 packaged app 下连续点击、回填最新步骤、结束进入编辑页的全链路
+- [ ] 继续对照 Folge 运行时代码，还原 capture window 的鼠标穿透与浮窗隐藏细节，停止继续凭经验微调
+- [ ] 核实并修正最终截图内容是否仍存在“只截到壁纸 / 背景层 / 预览比例异常”等 residual 问题
+- [ ] 为 capture 流补一份已核对的 Folge 事件/窗口对照表并持续更新
+
+### P1：先把编辑器真正做稳
 
 - [ ] 修稳 Editor 中间编辑面板的标注交互
 - [ ] 逐项验证并修正 `rect / ellipse / highlight / arrow / line / text / tooltip / blur / magnify / asset`
@@ -35,14 +49,14 @@
 - [ ] 验证标注选择、移动、缩放、删除、层级调整是否稳定
 - [ ] 验证富文本描述区与标注编辑区不会互相抢焦点或冲突
 
-### P1：补齐编辑页产品完成度
+### P2：补齐编辑页产品完成度
 
 - [ ] 继续收敛左侧步骤列表的视觉与交互细节
 - [ ] 继续对齐顶部工具区与 Folge 的布局和状态表现
 - [ ] 评估并补齐导出能力差距
 - [ ] 评估是否需要补更完整的导出格式，而不是只保留 HTML 路径
 
-### P2：再回头收其他页面
+### P3：再回头收其他页面
 
 - [ ] Home 页开始正式重构
 - [ ] Editor 进一步按功能拆分，降低大文件复杂度
@@ -62,7 +76,8 @@
 
 ### Recorder
 
-- [ ] 权限探测正常
+- [ ] 打包安装后的权限状态与系统授权状态一致，不再出现“已授权但 UI 误报未就绪”
+- [ ] 点击 `Click here to continue with capturing on this screen` 正常进入 studio，不再报 worker / handoff 错误
 - [ ] 开始录制正常
 - [ ] 暂停 / 恢复正常
 - [ ] 结束录制后正常进入编辑页
@@ -71,6 +86,8 @@
 - [ ] click stream 连续点击不丢步
 - [ ] 点击目标应用后不会错误关闭目标窗口
 - [ ] 浮窗不会被截入最终图片
+- [ ] 最终截图内容为真实桌面，而不是壁纸或错误背景层
+- [ ] studio 预览宽高比正确
 
 ### Editor
 
@@ -101,7 +118,7 @@
 
 ## 当前建议推进顺序
 
-1. 先把 Editor 中间标注面板彻底修稳
-2. 再把右侧 `Step Details` 对齐 Folge
-3. 然后做“真实截图编辑态”的完整回归
-4. 最后再回头收 Home 和更深的架构拆分
+1. 先把打包态 click capture 余下的真实截图内容问题收口，并完成开发态 / 打包态对照验证
+2. 再把 click capture 的 Pause / Resume / Finish / 回填最新步骤全链路做完回归
+3. 然后把 Editor 中间标注面板彻底修稳，并做“真实截图编辑态”的完整回归
+4. 最后再回头收 Home、Editor 深拆和更深的架构收敛

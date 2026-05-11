@@ -11,6 +11,24 @@
 3. Contracts between layers are typed and explicit.
 4. Capture, export, and persistence are replaceable adapters.
 5. Migration happens feature-by-feature, not by copying the old bundle wholesale.
+6. Existing Folge behavior is the implementation baseline for rebuilt features until an explicit deviation is reviewed and documented.
+
+## Parity-First Rebuild Rule
+
+The recovered Folge runtime in `/Users/jsh/Desktop/Folge_local_runtime/dist/electron` is the reference implementation for all already-existing product behavior.
+
+- Rebuild work must begin by inspecting the relevant Folge runtime paths, not by freehand reimagining the feature.
+- “Equivalent behavior” includes event timing, window orchestration, capture lifecycle, interaction lock/unlock rules, and visible UI states, not just rough feature presence.
+- When easyDo behavior differs from Folge, that difference must be treated as a bug or an intentional divergence; it must never remain an undocumented guess.
+- If the team chooses to improve on Folge, that decision comes after parity and must record why the original behavior was changed.
+
+### Verification requirements
+
+- Any parity-sensitive feature must carry two kinds of evidence:
+  - source evidence: which Folge runtime files, routes, windows, IPC events, or state transitions were inspected
+  - runtime evidence: whether the rebuilt flow was verified in dev mode and in the packaged app
+- For capture and editor interactions, packaged verification is mandatory because transparent windows, native hooks, permissions, and focus behavior can diverge from dev mode.
+- A feature is not “complete” when only renderer visuals appear correct; completion requires the verified event and window lifecycle to match the inspected Folge flow closely enough for the same task path to succeed.
 
 ## Proposed Bounded Contexts
 
@@ -85,3 +103,10 @@
 - Packaging, updater strategy, and production hardening
 - Structured logging and diagnostics
 - Regression checklist against the recovered runtime
+
+## Implementation Guardrails
+
+- Do not describe a feature as “done” unless its core flow has been checked against the Folge runtime.
+- Do not describe a parity-sensitive Electron workflow as “done” unless it has also been exercised in the packaged app.
+- Do not replace unclear Folge behavior with guessed UX just to keep progress moving.
+- Prefer extracting architecture and event flow from the recovered runtime over adding speculative abstractions in easyDo.

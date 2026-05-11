@@ -41,11 +41,8 @@ const isAreaSelection = computed(() => overlay.value?.mode === "area-selection")
 const isClickStreamHandoff = computed(() => overlay.value?.mode === "click-stream-handoff");
 const isClickStreamStudio = computed(() => overlay.value?.mode === "click-stream-studio");
 const isStudioRecording = computed(() => studio.value?.phase === "recording");
-const hasBackdropImage = computed(
-  () =>
-    !!overlay.value?.imageDataUrl &&
-    (isAreaSelection.value || (isClickStreamStudio.value && !isStudioRecording.value))
-);
+const isStudioHiddenForCapture = computed(() => studio.value?.hideDuringCapture ?? false);
+const hasBackdropImage = computed(() => !!overlay.value?.imageDataUrl && isAreaSelection.value);
 const studioMode = computed<CaptureTargetMode | null>(() => studio.value?.captureMode ?? null);
 const studioCropperVisible = computed(() => studio.value?.cropperVisible ?? true);
 const hasSelection = computed(
@@ -92,15 +89,23 @@ const studioMeasurementLabel = computed(() => {
 
   return "The full screen will be captured";
 });
+const studioPanelWidth = computed(() => {
+  if (studio.value?.phase === "recording" && studio.value.latestStep) {
+    return 476;
+  }
+
+  return 286;
+});
 const studioPanelStyle = computed(() => {
   const bounds = studio.value?.displayBounds ?? overlay.value?.displayBounds;
-  const defaultX = bounds ? Math.max(24, bounds.width - 286 - 80) : 80;
+  const defaultX = bounds ? Math.max(24, bounds.width - studioPanelWidth.value - 80) : 80;
   const defaultY = bounds ? Math.max(72, Math.round(bounds.height * 0.2)) : 96;
   const position = studioPanelPosition.value ?? { x: defaultX, y: defaultY };
 
   return {
     left: `${position.x}px`,
-    top: `${position.y}px`
+    top: `${position.y}px`,
+    width: `${studioPanelWidth.value}px`
   };
 });
 function toPlainRect(rect: SelectionRect): SelectionRect {
@@ -173,7 +178,7 @@ function clampStudioPanelPosition(position: { x: number; y: number }): { x: numb
     return position;
   }
 
-  const maxX = Math.max(24, bounds.width - 24 - 286);
+  const maxX = Math.max(24, bounds.width - 24 - studioPanelWidth.value);
   const maxY = Math.max(24, bounds.height - 24 - 360);
   return {
     x: Math.max(24, Math.min(position.x, maxX)),
@@ -182,14 +187,17 @@ function clampStudioPanelPosition(position: { x: number; y: number }): { x: numb
 }
 
 function syncStudioPanelPosition(): void {
-  if (!isClickStreamStudio.value || studio.value?.phase === "recording") {
+  if (!isClickStreamStudio.value) {
     return;
   }
 
   if (!studioPanelPosition.value) {
     studioPanelPosition.value = clampStudioPanelPosition(
       studioPanelPosition.value ?? {
-        x: (studio.value?.displayBounds.width ?? overlay.value?.displayBounds.width ?? 366) - 286 - 80,
+        x:
+          (studio.value?.displayBounds.width ?? overlay.value?.displayBounds.width ?? 366) -
+          studioPanelWidth.value -
+          80,
         y: Math.max(72, Math.round((studio.value?.displayBounds.height ?? overlay.value?.displayBounds.height ?? 480) * 0.2))
       }
     );
@@ -401,6 +409,22 @@ async function cancelSelection(): Promise<void> {
   }
 }
 
+function handleStudioPanelEnter(): void {
+  if (studio.value?.phase !== "recording") {
+    return;
+  }
+
+  window.easydo.capture.acceptOverlayMouse();
+}
+
+function handleStudioPanelLeave(): void {
+  if (studio.value?.phase !== "recording") {
+    return;
+  }
+
+  window.easydo.capture.ignoreOverlayMouse();
+}
+
 function handleKeydown(event: KeyboardEvent): void {
   if (event.key === "Escape") {
     void cancelSelection();
@@ -466,7 +490,8 @@ onUnmounted(() => {
   <section
     class="overlay"
     :class="{
-      'overlay--handoff': isClickStreamHandoff
+      'overlay--handoff': isClickStreamHandoff,
+      'overlay--shooting': isStudioHiddenForCapture
     }"
     @pointerdown="startSelection"
   >
@@ -550,12 +575,14 @@ onUnmounted(() => {
     </div>
 
     <div
-      v-if="isClickStreamStudio && studio?.phase !== 'recording'"
+      v-if="isClickStreamStudio"
       class="overlay__studio-panel"
       :style="studioPanelStyle"
       @pointerdown.stop="startStudioPanelDrag"
       @pointermove.stop
       @pointerup.stop
+      @pointerenter="handleStudioPanelEnter"
+      @pointerleave="handleStudioPanelLeave"
     >
       <CaptureStudioPanel embedded />
     </div>
@@ -605,6 +632,11 @@ onUnmounted(() => {
   background:
     radial-gradient(circle at center, rgba(255, 205, 79, 0.08), transparent 26%),
     rgba(0, 0, 0, 0.82);
+}
+
+.overlay--shooting {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .overlay__image,

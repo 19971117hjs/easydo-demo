@@ -1,7 +1,7 @@
 import { EventEmitter } from "node:events";
-import { desktopCapturer, screen } from "electron";
+import { nativeImage, screen } from "electron";
+import sharp from "sharp";
 import type {
-  CaptureControlsLayout,
   CaptureOverlayPayload,
   CaptureState,
   CaptureStepInput,
@@ -20,6 +20,7 @@ import { ActiveWindowService } from "@main/services/active-window.service";
 import type { MouseClickEvent } from "@main/services/iohook.service";
 import { PermissionsService } from "@main/services/permissions.service";
 import { ProjectService } from "@main/services/project.service";
+import { NativeCaptureService } from "@main/services/native-capture.service";
 import { WindowService } from "@main/services/window.service";
 import { buildStepNarrative, resolveInteractionContainer } from "@shared/step-intelligence";
 
@@ -59,6 +60,8 @@ type ClickCaptureStudioSession = {
     height: number;
   };
   cropperVisible: boolean;
+  hideDuringCapture: boolean;
+  overlayAcceptsMouse: boolean;
   selectedRegion: SelectionRect;
   activeWindowBounds: SelectionRect | null;
   activeWindowLabel: string | null;
@@ -99,6 +102,7 @@ export class ScreenCaptureService extends EventEmitter {
   private pendingAreaSelection: PendingAreaSelection | null = null;
   private pendingClickStreamHandoff: PendingClickStreamHandoff | null = null;
   private clickCaptureStudio: ClickCaptureStudioSession | null = null;
+  private readonly nativeCaptureService = new NativeCaptureService();
 
   constructor(
     private readonly captureService: CaptureService,
@@ -143,125 +147,74 @@ export class ScreenCaptureService extends EventEmitter {
     sequence: number
   ): Promise<CaptureStepResult> {
     const studio = this.clickCaptureStudio;
-    const shouldHideStudioChrome = studio?.phase === "recording";
+    const captureData =
+      studio?.phase === "recording"
+        ? await this.withStudioChromeHiddenForCapture(() =>
+            this.capturePreparedStudioStepFromClick(clickEvent)
+          )
+        : await this.capturePreparedStudioStepFromClick(clickEvent);
 
-    if (shouldHideStudioChrome) {
-      this.windowService.hideCaptureChrome();
-      await delay(110);
-    }
+    const { activeWindow, display, permissions, currentState } = captureData;
 
-    try {
-      const activeWindow = this.activeWindowService.getSnapshot();
-      const { image, display, permissions, currentState } = await this.captureDisplayAtPoint(
-        clickEvent.x,
-        clickEvent.y,
-        1800
-      );
+    let workingImage = captureData.workingImage;
+    let displayBoundsForAnnotation = captureData.displayBoundsForAnnotation;
+    let clickPointInCapture = captureData.clickPointInCapture;
 
-      let workingImage = image;
-      let displayBoundsForAnnotation = {
-        width: display.bounds.width,
-        height: display.bounds.height
-      };
-      let clickPointInCapture = {
-        x: clickEvent.x - display.bounds.x,
-        y: clickEvent.y - display.bounds.y
-      };
-
-      if (studio?.captureMode === "selected-region") {
-        const region = this.getStudioSelectionForDisplay(display.bounds);
-        if (region) {
-          const cropRect = this.normalizeRect(region, displayBoundsForAnnotation, image.getSize());
-          workingImage = image.crop(cropRect);
-          displayBoundsForAnnotation = {
-            width: region.width,
-            height: region.height
-          };
-          clickPointInCapture = {
-            x: clickPointInCapture.x - region.x,
-            y: clickPointInCapture.y - region.y
-          };
-        }
-      }
-
-      if (studio?.captureMode === "active-window") {
-        const target = this.resolveActiveWindowTarget(display, activeWindow);
-        if (target) {
-          const cropRect = this.normalizeRect(
-            target.bounds,
-            {
-              width: display.bounds.width,
-              height: display.bounds.height
-            },
-            image.getSize()
-          );
-          workingImage = image.crop(cropRect);
-          displayBoundsForAnnotation = {
-            width: target.bounds.width,
-            height: target.bounds.height
-          };
-          clickPointInCapture = {
-            x: clickPointInCapture.x - target.bounds.x,
-            y: clickPointInCapture.y - target.bounds.y
-          };
-          this.updateStudioActiveWindowState(target.bounds, target.label);
-        }
-      }
-
-      const trigger = this.buildClickCaptureEvent(clickEvent, display, sequence);
-      const interactionContainer = resolveInteractionContainer(
-        clickEvent.x,
-        clickEvent.y,
-        display.bounds,
-        display.label,
-        activeWindow
-      );
-      const stepNumber = input.project.steps.length + 1;
-      const narrative = buildStepNarrative({
+    const trigger = this.buildClickCaptureEvent(clickEvent, display, sequence);
+    const interactionContainer = resolveInteractionContainer(
+      clickEvent.x,
+      clickEvent.y,
+      display.bounds,
+      display.label,
+      activeWindow
+    );
+    const stepNumber = input.project.steps.length + 1;
+    const narrative = buildStepNarrative({
+      stepNumber,
+      clickIndex: sequence,
+      button: trigger.button,
+      clicks: trigger.clicks,
+      screenX: trigger.screenX,
+      screenY: trigger.screenY,
+      displayLabel: trigger.displayLabel,
+      activeWindow,
+      container: interactionContainer
+    });
+    const annotatedScreenshot = await this.annotateCaptureOnImage(
+      workingImage.toPNG(),
+      workingImage.getSize(),
+      {
         stepNumber,
         clickIndex: sequence,
-        button: trigger.button,
-        clicks: trigger.clicks,
-        screenX: trigger.screenX,
-        screenY: trigger.screenY,
-        displayLabel: trigger.displayLabel,
-        activeWindow,
-        container: interactionContainer
-      });
-      const annotatedScreenshot = await this.annotateCaptureOnImage(
-        workingImage.toPNG(),
-        workingImage.getSize(),
-        {
-          stepNumber,
-          clickIndex: sequence,
-          clickPoint: clickPointInCapture,
-          displayBounds: displayBoundsForAnnotation
-        }
-      );
+        clickPoint: clickPointInCapture,
+        displayBounds: displayBoundsForAnnotation
+      }
+    );
 
-      const result = await this.projectService.addCapturedStep({
-        project: input.project,
-        screenshot: annotatedScreenshot,
-        title: input.title?.trim() || narrative.title,
-        notes: input.notes?.trim() || narrative.notes,
-        width: workingImage.getSize().width,
-        height: workingImage.getSize().height,
-        displayLabel: display.label,
-        clickIndex: sequence,
-        appName: narrative.appName,
-        windowTitle: narrative.windowTitle,
-        contextLabel: narrative.contextLabel
-      });
+    const result = await this.projectService.addCapturedStep({
+      project: input.project,
+      screenshot: annotatedScreenshot,
+      title: input.title?.trim() || narrative.title,
+      notes: input.notes?.trim() || narrative.notes,
+      width: workingImage.getSize().width,
+      height: workingImage.getSize().height,
+      displayLabel: display.label,
+      clickIndex: sequence,
+      appName: narrative.appName,
+      windowTitle: narrative.windowTitle,
+      contextLabel: narrative.contextLabel
+    });
 
-      this.recordStudioStep({
-        project: result.project,
-        capturedStep: result.capturedStep,
-        asset: result.asset,
-        captureState: currentState,
-        permissions,
-        trigger
-      });
+    this.recordStudioStep({
+      project: result.project,
+      capturedStep: result.capturedStep,
+      asset: result.asset,
+      captureState: currentState,
+      permissions,
+      trigger
+    });
 
+    try {
       return {
         project: result.project,
         capturedStep: result.capturedStep,
@@ -271,10 +224,8 @@ export class ScreenCaptureService extends EventEmitter {
         trigger
       };
     } finally {
-      if (shouldHideStudioChrome && this.clickCaptureStudio?.phase === "recording") {
-        await delay(60);
-        this.windowService.showCaptureChrome();
-        this.windowService.setCaptureOverlayInteractive(false);
+      if (this.clickCaptureStudio?.phase === "recording") {
+        this.windowService.ignoreCaptureOverlayMouse();
       }
     }
   }
@@ -327,16 +278,17 @@ export class ScreenCaptureService extends EventEmitter {
       throw new Error("Another capture overlay is already in progress.");
     }
 
-    const permissions = await this.permissionsService.getSnapshot();
-    if (!permissions.canCaptureScreens) {
-      throw new Error("Screen Recording permission is required for click stream capture.");
-    }
-
-    const currentDisplay = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+    const cursorPoint = screen.getCursorScreenPoint();
+    const currentDisplay = this.nativeCaptureService.getDisplayAtPoint(cursorPoint.x, cursorPoint.y);
     const display: DisplaySnapshot = {
-      id: String(currentDisplay.id),
-      bounds: currentDisplay.bounds,
-      label: currentDisplay.label || currentDisplay.id?.toString() || "Display"
+      id: currentDisplay.id,
+      bounds: {
+        x: currentDisplay.x,
+        y: currentDisplay.y,
+        width: currentDisplay.width,
+        height: currentDisplay.height
+      },
+      label: currentDisplay.isPrimary ? "Primary Display" : `Display ${currentDisplay.id}`
     };
 
     this.windowService.hideMainWindow();
@@ -386,6 +338,7 @@ export class ScreenCaptureService extends EventEmitter {
         : null,
       activeWindowLabel: this.clickCaptureStudio.activeWindowLabel,
       cropperVisible: this.clickCaptureStudio.cropperVisible,
+      hideDuringCapture: this.clickCaptureStudio.hideDuringCapture,
       stepCount: this.clickCaptureStudio.input.project.steps.length,
       latestStep: this.clickCaptureStudio.latestStep
         ? { ...this.clickCaptureStudio.latestStep }
@@ -399,29 +352,38 @@ export class ScreenCaptureService extends EventEmitter {
       throw new Error("No click stream handoff is currently waiting.");
     }
 
-    this.pendingClickStreamHandoff = null;
-    this.windowService.closeCaptureOverlayWindow();
+    const handoffPayload = this.overlayPayload;
+    this.windowService.hideCaptureChrome();
     await delay(90);
-    const backdrop = await this.captureDisplayPreview(pending.display);
-    this.clickCaptureStudio = {
-      input: pending.input,
-      phase: "setup",
-      captureMode: "selected-region",
-      display: pending.display,
-      backdropImageDataUrl: backdrop.image.toDataURL(),
-      backdropImageSize: backdrop.image.getSize(),
-      cropperVisible: true,
-      selectedRegion: this.createDefaultStudioSelection(pending.display.bounds),
-      activeWindowBounds: null,
-      activeWindowLabel: null,
-      latestStep: null
-    };
-    this.overlayPayload = this.createStudioOverlayPayload();
-    this.windowService.createCaptureOverlayWindow(pending.display.bounds);
-    this.windowService.closeCaptureControlsWindow();
-    this.syncStudioChrome();
-    this.emitStudioChanged();
-    this.emitClickStreamStatus("setup");
+
+    try {
+      const backdrop = await this.captureDisplayPreview(pending.display);
+      this.pendingClickStreamHandoff = null;
+      this.clickCaptureStudio = {
+        input: pending.input,
+        phase: "setup",
+        captureMode: "selected-region",
+        display: pending.display,
+        backdropImageDataUrl: backdrop.image.toDataURL(),
+        backdropImageSize: backdrop.image.getSize(),
+        cropperVisible: true,
+        hideDuringCapture: false,
+        overlayAcceptsMouse: false,
+        selectedRegion: this.createDefaultStudioSelection(pending.display.bounds),
+        activeWindowBounds: null,
+        activeWindowLabel: null,
+        latestStep: null
+      };
+      this.overlayPayload = this.createStudioOverlayPayload();
+      this.syncStudioChrome();
+      this.emitStudioChanged();
+      this.emitClickStreamStatus("setup");
+    } catch (error) {
+      this.overlayPayload = handoffPayload;
+      this.windowService.showCaptureChrome();
+      this.emitClickStreamStatus("handoff");
+      throw error;
+    }
   }
 
   prepareStudioForRecording(): void {
@@ -431,7 +393,8 @@ export class ScreenCaptureService extends EventEmitter {
 
     this.clickCaptureStudio.phase = "recording";
     this.overlayPayload = this.createStudioOverlayPayload();
-    this.ensureCaptureControlsWindow();
+    this.windowService.ignoreCaptureOverlayMouse();
+    this.windowService.showCaptureChrome();
     this.syncStudioChrome();
     this.emitStudioChanged();
   }
@@ -443,7 +406,6 @@ export class ScreenCaptureService extends EventEmitter {
 
     this.clickCaptureStudio.phase = "paused";
     this.overlayPayload = this.createStudioOverlayPayload();
-    this.windowService.closeCaptureControlsWindow();
     this.syncStudioChrome();
     this.emitStudioChanged();
     this.emitClickStreamStatus("paused");
@@ -457,7 +419,8 @@ export class ScreenCaptureService extends EventEmitter {
 
     this.clickCaptureStudio.phase = "recording";
     this.overlayPayload = this.createStudioOverlayPayload();
-    this.ensureCaptureControlsWindow();
+    this.windowService.ignoreCaptureOverlayMouse();
+    this.windowService.showCaptureChrome();
     this.syncStudioChrome();
     this.emitStudioChanged();
   }
@@ -618,6 +581,28 @@ export class ScreenCaptureService extends EventEmitter {
     this.completeStudioSession(true);
   }
 
+  acceptOverlayMouse(): void {
+    if (!this.clickCaptureStudio) {
+      return;
+    }
+
+    this.clickCaptureStudio.overlayAcceptsMouse = true;
+    this.windowService.acceptCaptureOverlayMouse();
+  }
+
+  ignoreOverlayMouse(): void {
+    if (!this.clickCaptureStudio) {
+      return;
+    }
+
+    this.clickCaptureStudio.overlayAcceptsMouse = false;
+    this.windowService.ignoreCaptureOverlayMouse();
+  }
+
+  isOverlayCapturingPointerInteraction(): boolean {
+    return this.clickCaptureStudio?.overlayAcceptsMouse ?? false;
+  }
+
   async confirmOverlaySelection(rect: SelectionRect): Promise<void> {
     const pending = this.pendingAreaSelection;
     if (!pending) {
@@ -752,53 +737,12 @@ export class ScreenCaptureService extends EventEmitter {
       return;
     }
 
-    this.windowService.setCaptureOverlayInteractive(
-      studio.cropperVisible && studio.phase !== "recording"
-    );
     if (studio.phase === "recording") {
-      this.windowService.resizeCaptureControlsWindow(this.getCaptureControlsLayout(studio));
-    }
-  }
-
-  private ensureCaptureControlsWindow(): void {
-    const studio = this.clickCaptureStudio;
-    if (!studio) {
+      this.windowService.ignoreCaptureOverlayMouse();
       return;
     }
 
-    if (this.windowService.getCaptureControlsWindow()) {
-      return;
-    }
-
-    this.windowService.createCaptureControlsWindow(
-      studio.display.bounds,
-      this.getCaptureControlsLayout(studio)
-    );
-  }
-
-  private getCaptureControlsLayout(
-    studio: ClickCaptureStudioSession
-  ): CaptureControlsLayout {
-    const width = studio.latestStep ? 306 : 286;
-
-    if (studio.phase === "setup") {
-      return {
-        width,
-        height: 318
-      };
-    }
-
-    if (studio.phase === "paused") {
-      return {
-        width,
-        height: 374
-      };
-    }
-
-    return {
-      width,
-      height: studio.latestStep ? 476 : 210
-    };
+    this.windowService.acceptCaptureOverlayMouse();
   }
 
   private async refreshStudioActiveWindowTarget(): Promise<void> {
@@ -806,12 +750,10 @@ export class ScreenCaptureService extends EventEmitter {
       return;
     }
 
-    this.windowService.hideCaptureChrome();
-    await delay(100);
-    const activeWindow = this.activeWindowService.getSnapshot();
-    const target = this.resolveActiveWindowTarget(this.clickCaptureStudio.display, activeWindow);
-    this.windowService.showCaptureChrome();
-    this.syncStudioChrome();
+    const target = await this.withStudioChromeHiddenForCapture(async () => {
+      const activeWindow = this.activeWindowService.getSnapshot();
+      return this.resolveActiveWindowTarget(this.clickCaptureStudio!.display, activeWindow);
+    });
 
     if (!target) {
       this.clickCaptureStudio.activeWindowBounds = null;
@@ -897,25 +839,13 @@ export class ScreenCaptureService extends EventEmitter {
     permissions: Awaited<ReturnType<PermissionsService["getSnapshot"]>>;
     currentState: ReturnType<CaptureService["getState"]>;
   }> {
-    return this.captureDisplayFromElectronDisplay(screen.getPrimaryDisplay());
+    return this.captureDisplayById(this.nativeCaptureService.getPrimaryDisplay().id);
   }
 
   private async captureDisplayPreview(display: DisplaySnapshot): Promise<{
     image: Electron.NativeImage;
   }> {
-    const electronDisplay = this.resolveElectronDisplay(display);
-    if (!electronDisplay) {
-      throw new Error("Unable to find the selected display for capture preview.");
-    }
-
-    const permissions = await this.permissionsService.getSnapshot();
-    if (!permissions.canCaptureScreens) {
-      throw new Error(
-        "Screen capture is not available yet. Grant Screen Recording permission and retry."
-      );
-    }
-
-    const { image } = await this.captureDisplayThumbnail(electronDisplay, 2300);
+    const { image } = await this.captureNativeDisplay(display.id, 2300);
     return { image };
   }
 
@@ -929,14 +859,14 @@ export class ScreenCaptureService extends EventEmitter {
     permissions: Awaited<ReturnType<PermissionsService["getSnapshot"]>>;
     currentState: ReturnType<CaptureService["getState"]>;
   }> {
-    return this.captureDisplayFromElectronDisplay(
-      screen.getDisplayNearestPoint({ x, y }),
+    return this.captureDisplayById(
+      this.nativeCaptureService.getDisplayAtPoint(x, y).id,
       maxCaptureWidth
     );
   }
 
-  private async captureDisplayFromElectronDisplay(
-    electronDisplay: Electron.Display,
+  private async captureDisplayById(
+    displayId: string,
     maxCaptureWidth = 2300
   ): Promise<{
     image: Electron.NativeImage;
@@ -945,13 +875,8 @@ export class ScreenCaptureService extends EventEmitter {
     currentState: ReturnType<CaptureService["getState"]>;
   }> {
     const permissions = await this.permissionsService.getSnapshot();
-    if (!permissions.canCaptureScreens) {
-      throw new Error(
-        "Screen capture is not available yet. Grant Screen Recording permission and retry."
-      );
-    }
-
-    const { image, label } = await this.captureDisplayThumbnail(electronDisplay, maxCaptureWidth);
+    const nativeDisplay = this.resolveDisplaySnapshot(displayId);
+    const { image, label } = await this.captureNativeDisplay(displayId, maxCaptureWidth);
 
     const currentState =
       this.captureService.getState().status === "recording"
@@ -961,8 +886,13 @@ export class ScreenCaptureService extends EventEmitter {
     return {
       image,
       display: {
-        id: String(electronDisplay.id),
-        bounds: electronDisplay.bounds,
+        id: nativeDisplay.id,
+        bounds: {
+          x: nativeDisplay.x,
+          y: nativeDisplay.y,
+          width: nativeDisplay.width,
+          height: nativeDisplay.height
+        },
         label
       },
       permissions,
@@ -970,51 +900,131 @@ export class ScreenCaptureService extends EventEmitter {
     };
   }
 
-  private resolveElectronDisplay(display: DisplaySnapshot): Electron.Display | null {
-    return (
-      screen
-        .getAllDisplays()
-        .find(
-          (electronDisplay) =>
-            String(electronDisplay.id) === display.id ||
-            (electronDisplay.bounds.x === display.bounds.x &&
-              electronDisplay.bounds.y === display.bounds.y &&
-              electronDisplay.bounds.width === display.bounds.width &&
-              electronDisplay.bounds.height === display.bounds.height)
-        ) ?? null
+  private async capturePreparedStudioStepFromClick(
+    clickEvent: MouseClickEvent
+  ): Promise<{
+    activeWindow: ReturnType<ActiveWindowService["getSnapshot"]>;
+    image: Electron.NativeImage;
+    workingImage: Electron.NativeImage;
+    display: DisplaySnapshot;
+    permissions: Awaited<ReturnType<PermissionsService["getSnapshot"]>>;
+    currentState: ReturnType<CaptureService["getState"]>;
+    displayBoundsForAnnotation: {
+      width: number;
+      height: number;
+    };
+    clickPointInCapture: {
+      x: number;
+      y: number;
+    };
+  }> {
+    const studio = this.clickCaptureStudio;
+    const activeWindow = this.activeWindowService.getSnapshot();
+    const { image, display, permissions, currentState } = await this.captureDisplayAtPoint(
+      clickEvent.x,
+      clickEvent.y,
+      1800
     );
-  }
 
-  private async captureDisplayThumbnail(
-    electronDisplay: Electron.Display,
-    maxCaptureWidth: number
-  ): Promise<{ image: Electron.NativeImage; label: string }> {
-    const captureWidth = Math.min(
-      Math.round(electronDisplay.size.width * electronDisplay.scaleFactor),
-      maxCaptureWidth
-    );
-    const aspectRatio = electronDisplay.size.width / electronDisplay.size.height;
-    const captureHeight = Math.max(1, Math.round(captureWidth / aspectRatio));
+    let workingImage = image;
+    let displayBoundsForAnnotation = {
+      width: display.bounds.width,
+      height: display.bounds.height
+    };
+    let clickPointInCapture = {
+      x: clickEvent.x - display.bounds.x,
+      y: clickEvent.y - display.bounds.y
+    };
 
-    const sources = await desktopCapturer.getSources({
-      types: ["screen"],
-      thumbnailSize: {
-        width: captureWidth,
-        height: captureHeight
-      },
-      fetchWindowIcons: false
-    });
+    if (studio?.captureMode === "selected-region") {
+      const region = this.getStudioSelectionForDisplay(display.bounds);
+      if (region) {
+        const cropRect = this.normalizeRect(region, displayBoundsForAnnotation, image.getSize());
+        workingImage = image.crop(cropRect);
+        displayBoundsForAnnotation = {
+          width: region.width,
+          height: region.height
+        };
+        clickPointInCapture = {
+          x: clickPointInCapture.x - region.x,
+          y: clickPointInCapture.y - region.y
+        };
+      }
+    }
 
-    const matchingSource =
-      sources.find((source) => source.display_id === String(electronDisplay.id)) ?? sources[0];
-
-    if (!matchingSource || matchingSource.thumbnail.isEmpty()) {
-      throw new Error("Unable to capture the current display. The returned thumbnail is empty.");
+    if (studio?.captureMode === "active-window") {
+      const target = this.resolveActiveWindowTarget(display, activeWindow);
+      if (target) {
+        const cropRect = this.normalizeRect(
+          target.bounds,
+          {
+            width: display.bounds.width,
+            height: display.bounds.height
+          },
+          image.getSize()
+        );
+        workingImage = image.crop(cropRect);
+        displayBoundsForAnnotation = {
+          width: target.bounds.width,
+          height: target.bounds.height
+        };
+        clickPointInCapture = {
+          x: clickPointInCapture.x - target.bounds.x,
+          y: clickPointInCapture.y - target.bounds.y
+        };
+        this.updateStudioActiveWindowState(target.bounds, target.label);
+      }
     }
 
     return {
-      image: matchingSource.thumbnail,
-      label: matchingSource.name || `Display ${electronDisplay.id}`
+      activeWindow,
+      image,
+      workingImage,
+      display,
+      permissions,
+      currentState,
+      displayBoundsForAnnotation,
+      clickPointInCapture
+    };
+  }
+
+  private resolveDisplaySnapshot(displayId: string) {
+    const display = this.nativeCaptureService
+      .getDisplays()
+      .find((candidate) => candidate.id === displayId);
+
+    if (!display) {
+      throw new Error(`Unable to find native display ${displayId} for capture.`);
+    }
+
+    return display;
+  }
+
+  private async captureNativeDisplay(
+    displayId: string,
+    maxCaptureWidth: number
+  ): Promise<{ image: Electron.NativeImage; label: string }> {
+    const display = this.resolveDisplaySnapshot(displayId);
+    const rawBuffer = await this.nativeCaptureService.captureDisplay(displayId);
+    let image = nativeImage.createFromBuffer(rawBuffer);
+
+    if (image.isEmpty()) {
+      throw new Error("Folge native capture returned an empty display image.");
+    }
+
+    const imageSize = image.getSize();
+    if (imageSize.width > maxCaptureWidth) {
+      const scale = maxCaptureWidth / imageSize.width;
+      image = image.resize({
+        width: maxCaptureWidth,
+        height: Math.max(1, Math.round(imageSize.height * scale)),
+        quality: "best"
+      });
+    }
+
+    return {
+      image,
+      label: display.isPrimary ? "Primary Display" : `Display ${display.id}`
     };
   }
 
@@ -1024,9 +1034,9 @@ export class ScreenCaptureService extends EventEmitter {
     }
 
     try {
-      this.windowService.hideCaptureChrome();
-      await delay(90);
-      const backdrop = await this.captureDisplayPreview(this.clickCaptureStudio.display);
+      const backdrop = await this.withStudioChromeHiddenForCapture(() =>
+        this.captureDisplayPreview(this.clickCaptureStudio!.display)
+      );
       if (!this.clickCaptureStudio) {
         return;
       }
@@ -1034,13 +1044,38 @@ export class ScreenCaptureService extends EventEmitter {
       this.clickCaptureStudio.backdropImageDataUrl = backdrop.image.toDataURL();
       this.clickCaptureStudio.backdropImageSize = backdrop.image.getSize();
       this.overlayPayload = this.createStudioOverlayPayload();
-      this.windowService.showCaptureChrome();
       this.syncStudioChrome();
       this.emitStudioChanged();
     } catch (error) {
-      this.windowService.showCaptureChrome();
       this.syncStudioChrome();
       this.emit("error", error);
+    }
+  }
+
+  private async withStudioChromeHiddenForCapture<T>(
+    task: () => Promise<T>,
+    settleDelayMs = 120
+  ): Promise<T> {
+    if (!this.clickCaptureStudio) {
+      return task();
+    }
+
+    const previousAcceptsMouse = this.clickCaptureStudio.overlayAcceptsMouse;
+    this.clickCaptureStudio.hideDuringCapture = true;
+    this.clickCaptureStudio.overlayAcceptsMouse = false;
+    this.emitStudioChanged();
+    this.windowService.ignoreCaptureOverlayMouse();
+    await delay(settleDelayMs);
+
+    try {
+      return await task();
+    } finally {
+      if (this.clickCaptureStudio) {
+        this.clickCaptureStudio.hideDuringCapture = false;
+        this.clickCaptureStudio.overlayAcceptsMouse = previousAcceptsMouse;
+        this.emitStudioChanged();
+        this.syncStudioChrome();
+      }
     }
   }
 
@@ -1054,7 +1089,6 @@ export class ScreenCaptureService extends EventEmitter {
       displayBounds?: { width: number; height: number };
     }
   ): Promise<Buffer> {
-    const { default: sharp } = await import("sharp");
     const stepBadgeText = `STEP ${String(options.stepNumber).padStart(2, "0")}`;
     const stepBadgeWidth = Math.max(120, 44 + stepBadgeText.length * 14);
     const stepBadge = `

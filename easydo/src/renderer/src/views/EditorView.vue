@@ -246,12 +246,12 @@ const introStatusText = computed(() => {
     return `Click capture is live: ${clickProgressText.value}. Switch to the target app and click through the workflow.`;
   }
 
-  if (!workbench.permissionSnapshot?.canCaptureScreens) {
-    return "Screen capture is not ready yet. Check macOS screen recording and accessibility permissions before starting the core recording flow.";
-  }
-
   if (workbench.clickStreamError) {
     return workbench.clickStreamError;
+  }
+
+  if (!workbench.permissionSnapshot?.canCaptureScreens) {
+    return "Permissions still need verification, but the recorder now attempts the real capture flow instead of blocking here first.";
   }
 
   return "Your guide has no steps yet. Add new steps from:";

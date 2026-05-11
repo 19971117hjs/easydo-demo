@@ -57,6 +57,8 @@ const api: EasyDoApi = {
       ipcRenderer.invoke("capture:set-studio-selection-rect", rect),
     setStudioCropperVisible: (visible: boolean) =>
       ipcRenderer.invoke("capture:set-studio-cropper-visible", visible),
+    acceptOverlayMouse: () => ipcRenderer.send("capture:accept-overlay-mouse"),
+    ignoreOverlayMouse: () => ipcRenderer.send("capture:ignore-overlay-mouse"),
     updateStudioLatestStep: (input) => ipcRenderer.invoke("capture:update-studio-latest-step", input),
     deleteStudioLatestStep: () => ipcRenderer.invoke("capture:delete-studio-latest-step"),
     stopClickStream: () => ipcRenderer.invoke("capture:stop-click-stream"),

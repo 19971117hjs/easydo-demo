@@ -64,14 +64,9 @@ export function registerCaptureIpc(
       throw new Error("No click capture studio session is ready to start.");
     }
 
+    await clickStreamService.assertCanStartSession(true);
     screenCaptureService.prepareStudioForRecording();
-
-    try {
-      return await clickStreamService.startSession(input);
-    } catch (error) {
-      screenCaptureService.pauseStudioSession();
-      throw error;
-    }
+    return clickStreamService.startSession(input);
   });
   ipcMain.handle("capture:pause-studio-capture", () => {
     screenCaptureService.pauseStudioSession();
@@ -97,6 +92,12 @@ export function registerCaptureIpc(
   ipcMain.handle("capture:set-studio-cropper-visible", (_event, visible: boolean) =>
     screenCaptureService.setStudioCropperVisible(visible)
   );
+  ipcMain.on("capture:accept-overlay-mouse", () => {
+    screenCaptureService.acceptOverlayMouse();
+  });
+  ipcMain.on("capture:ignore-overlay-mouse", () => {
+    screenCaptureService.ignoreOverlayMouse();
+  });
   ipcMain.handle("capture:update-studio-latest-step", async (_event, input: UpdateCaptureStudioLatestStepInput) => {
     const payload = await screenCaptureService.updateStudioLatestStep(input);
     const project = screenCaptureService.getStudioCaptureInput()?.project;

@@ -44,19 +44,24 @@ export class ClickStreamService extends EventEmitter {
     });
   }
 
-  async startSession(input: CaptureStepInput): Promise<CaptureState> {
+  async assertCanStartSession(requestPrompt = false): Promise<void> {
     const permissions = await this.permissionsService.getSnapshot();
-    if (permissions.accessibility !== "granted") {
-      throw new Error(
-        "Accessibility permission is required for click stream capture. Grant it in macOS Privacy & Security > Accessibility."
-      );
-    }
+    const accessibility =
+      permissions.accessibility === "granted"
+        ? "granted"
+        : requestPrompt
+          ? this.permissionsService.requestAccessibilityAccess()
+          : permissions.accessibility;
 
-    if (!permissions.canCaptureScreens) {
+    if (accessibility !== "granted") {
       throw new Error(
-        "Screen Recording permission is required for click stream capture."
+        "Accessibility permission is required for click stream capture. Grant it to the installed easyDo app in macOS Privacy & Security > Accessibility, then relaunch the app."
       );
     }
+  }
+
+  async startSession(input: CaptureStepInput): Promise<CaptureState> {
+    await this.assertCanStartSession();
 
     this.session = {
       project: input.project,
@@ -170,6 +175,11 @@ export class ClickStreamService extends EventEmitter {
 
     if (this.isDuplicateClick(event)) {
       this.emit("status", "debounced");
+      return;
+    }
+
+    if (this.screenCaptureService.isOverlayCapturingPointerInteraction()) {
+      this.emit("status", "ignored-control-window");
       return;
     }
 

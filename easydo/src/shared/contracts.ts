@@ -6,6 +6,10 @@ export interface AppOverview {
   version: string;
   platform: NodeJS.Platform;
   userDataPath: string;
+  isPackaged: boolean;
+  runtimeIdentity: string;
+  execPath: string;
+  appPath: string;
 }
 
 export interface EditorUiPrefs {
@@ -88,6 +92,7 @@ export interface CaptureStudioPayload {
   activeWindowBounds: SelectionRect | null;
   activeWindowLabel: string | null;
   cropperVisible: boolean;
+  hideDuringCapture: boolean;
   stepCount: number;
   latestStep: CaptureStudioLatestStep | null;
 }
@@ -469,6 +474,8 @@ export interface EasyDoApi {
     setStudioCaptureMode: (mode: CaptureTargetMode) => Promise<CaptureStudioPayload | null>;
     setStudioSelectionRect: (rect: SelectionRect) => Promise<CaptureStudioPayload | null>;
     setStudioCropperVisible: (visible: boolean) => Promise<CaptureStudioPayload | null>;
+    acceptOverlayMouse: () => void;
+    ignoreOverlayMouse: () => void;
     updateStudioLatestStep: (input: UpdateCaptureStudioLatestStepInput) => Promise<CaptureStudioPayload | null>;
     deleteStudioLatestStep: () => Promise<CaptureStudioPayload | null>;
     stopClickStream: () => Promise<CaptureState>;

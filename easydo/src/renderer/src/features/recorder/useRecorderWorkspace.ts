@@ -194,15 +194,14 @@ export function useRecorderWorkspace() {
   );
   const canCaptureScreens = computed(() => permissionSnapshot.value?.canCaptureScreens ?? false);
   const canStartSession = computed(() =>
-    canCaptureScreens.value &&
     ["idle", "paused", "stopped"].includes(captureState.value?.status ?? "idle")
   );
   const canPauseSession = computed(() => captureState.value?.status === "recording");
   const canStopSession = computed(
     () => clickStreamActive.value || !["idle", "stopped"].includes(captureState.value?.status ?? "idle")
   );
-  const canStartClickStream = computed(() => canCaptureScreens.value && !clickStreamActive.value);
-  const canCaptureNow = computed(() => canCaptureScreens.value);
+  const canStartClickStream = computed(() => !clickStreamActive.value);
+  const canCaptureNow = computed(() => true);
   const guideName = computed(() => project.value?.name || "New guide");
   const guideMeta = computed(() => {
     const stepCount = project.value?.steps.length ?? 0;
@@ -307,8 +306,8 @@ export function useRecorderWorkspace() {
   });
 
   const statusNarrative = computed(() => {
-    if (!permissionSnapshot.value?.canCaptureScreens) {
-      return "Recorder is blocked by macOS permissions. Fix permissions first so the rebuilt shell behaves like a real product page, not a debug surface.";
+    if (!canCaptureScreens.value) {
+      return "Screen capture permissions still look unresolved, but easyDo will now follow the real Folge path and verify with a live capture instead of blocking you here.";
     }
 
     if (clickStreamActive.value) {

@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import type { CaptureStudioPayload, CaptureTargetMode, ClickStreamProgress } from "@shared/contracts";
 import { getErrorMessage } from "@renderer/utils/error-message";
 
-const props = withDefaults(
+withDefaults(
   defineProps<{
     embedded?: boolean;
   }>(),
@@ -48,7 +48,7 @@ watch(
 );
 
 watch([latestTitle, latestNotes], () => {
-  if (!latestStep.value || props.embedded) {
+  if (!latestStep.value) {
     return;
   }
 
@@ -345,7 +345,7 @@ onUnmounted(() => {
 }
 
 .studio-panel--embedded {
-  width: 286px;
+  width: 100%;
   min-height: auto;
 }
 
@@ -497,9 +497,13 @@ onUnmounted(() => {
 }
 
 .latest-step__preview img {
-  width: 100%;
-  height: 100px;
-  object-fit: cover;
+  display: block;
+  width: auto;
+  max-width: 100%;
+  max-height: 130px;
+  height: auto;
+  object-fit: contain;
+  margin: 0 auto;
   border-radius: 4px;
   border: 1px solid rgba(31, 35, 41, 0.12);
   background: #edf0f4;

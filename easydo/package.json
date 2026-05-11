@@ -50,9 +50,20 @@
       "target": [
         "dmg"
       ],
+      "identity": "-",
+      "gatekeeperAssess": false,
       "category": "public.app-category.productivity",
       "artifactName": "${productName}-${version}-${arch}.${ext}"
-    }
+    },
+    "extraResources": [
+      {
+        "from": "resources/native-capture",
+        "to": "native-capture",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ]
   },
   "pnpm": {
     "onlyBuiltDependencies": [

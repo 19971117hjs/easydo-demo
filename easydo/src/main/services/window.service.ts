@@ -107,13 +107,16 @@ export class WindowService {
       roundedCorners: false,
       hasShadow: false,
       focusable: true,
+      acceptFirstMouse: true,
+      enableLargerThanScreen: true,
       backgroundColor: "#00000000",
       title: "easyDo Capture Overlay",
       autoHideMenuBar: true,
       webPreferences: {
         preload: join(__dirname, "../preload/index.cjs"),
         contextIsolation: true,
-        nodeIntegration: false
+        nodeIntegration: false,
+        backgroundThrottling: false
       }
     });
 
@@ -125,6 +128,10 @@ export class WindowService {
         hash: "/capture-overlay"
       });
     }
+
+    window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    window.setAlwaysOnTop(true, "screen-saver", 1);
+    window.setContentProtection(true);
 
     window.once("ready-to-show", () => {
       window.show();
@@ -167,13 +174,16 @@ export class WindowService {
       alwaysOnTop: true,
       roundedCorners: false,
       hasShadow: true,
+      acceptFirstMouse: true,
+      enableLargerThanScreen: true,
       backgroundColor: "#00000000",
       title: "easyDo Capture Controls",
       autoHideMenuBar: true,
       webPreferences: {
         preload: join(__dirname, "../preload/index.cjs"),
         contextIsolation: true,
-        nodeIntegration: false
+        nodeIntegration: false,
+        backgroundThrottling: false
       }
     });
 
@@ -185,6 +195,10 @@ export class WindowService {
         hash: "/capture-controls"
       });
     }
+
+    window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    window.setAlwaysOnTop(true, "screen-saver", 1);
+    window.setContentProtection(true);
 
     window.once("ready-to-show", () => {
       window.show();
@@ -215,12 +229,45 @@ export class WindowService {
     });
   }
 
+  acceptCaptureOverlayMouse(): void {
+    if (!this.overlayWindow || this.overlayWindow.isDestroyed()) {
+      return;
+    }
+
+    if (typeof this.overlayWindow.setFocusable === "function") {
+      this.overlayWindow.setFocusable(true);
+    }
+
+    this.overlayWindow.setIgnoreMouseEvents(false);
+    this.overlayWindow.show();
+    this.overlayWindow.focus();
+  }
+
+  ignoreCaptureOverlayMouse(): void {
+    if (!this.overlayWindow || this.overlayWindow.isDestroyed()) {
+      return;
+    }
+
+    if (typeof this.overlayWindow.setFocusable === "function") {
+      this.overlayWindow.setFocusable(false);
+    }
+
+    this.overlayWindow.setIgnoreMouseEvents(true, { forward: true });
+    this.overlayWindow.blur();
+    this.overlayWindow.showInactive();
+  }
+
   setCaptureOverlayInteractive(interactive: boolean): void {
     if (!this.overlayWindow || this.overlayWindow.isDestroyed()) {
       return;
     }
 
-    this.overlayWindow.setIgnoreMouseEvents(!interactive, { forward: true });
+    if (interactive) {
+      this.acceptCaptureOverlayMouse();
+      return;
+    }
+
+    this.ignoreCaptureOverlayMouse();
   }
 
   hideCaptureChrome(): void {
