@@ -685,24 +685,9 @@ function handleWindowMouseUp(event: MouseEvent): void {
       created = createLineAnnotation(state.tool, state.start, finalPoint);
     }
 
-    let nextAnnotations = [...workingAnnotations.value, created];
+    const nextAnnotations = [...workingAnnotations.value, created];
     draftAnnotation.value = null;
     interaction.value = null;
-
-    if (created.type === "text" || created.type === "tooltip") {
-      const entered = window.prompt(
-        created.type === "tooltip" ? "输入提示文案" : "输入标注文字",
-        created.text ?? (created.type === "tooltip" ? "Explain this area" : "Add text")
-      );
-
-      if (entered !== null) {
-        created = {
-          ...created,
-          text: entered.trim() || (created.type === "tooltip" ? "Explain this area" : "Add text")
-        };
-        nextAnnotations = [...workingAnnotations.value, created];
-      }
-    }
 
     syncAnnotations(nextAnnotations, created.id);
     // Auto-switch to select mode after drawing
@@ -938,25 +923,9 @@ function editTextAnnotation(annotation: StepAnnotation): void {
     return;
   }
 
-  const entered = window.prompt(
-    annotation.type === "tooltip" ? "编辑提示文案" : "编辑标注文字",
-    annotation.text ?? (annotation.type === "tooltip" ? "Explain this area" : "Add text")
-  );
-  if (entered === null) {
-    return;
-  }
-
-  syncAnnotations(
-    workingAnnotations.value.map((item) =>
-      item.id === annotation.id
-        ? {
-            ...item,
-            text: entered.trim() || (annotation.type === "tooltip" ? "Explain this area" : "Add text")
-          }
-        : item
-    ),
-    annotation.id
-  );
+  // Text/tooltip content is edited from the details panel.
+  setSelectedId(annotation.id);
+  stageRef.value?.focus();
 }
 
 function handleKeydown(event: KeyboardEvent): void {

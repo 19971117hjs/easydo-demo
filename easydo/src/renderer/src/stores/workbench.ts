@@ -121,6 +121,16 @@ function normalizeProject(project: ProjectDraft): ProjectDraft {
         showStepNumber: step.kind !== "content",
         ...(step.settings ?? {})
       },
+      cropRestoreState: step.cropRestoreState
+        ? {
+            ...step.cropRestoreState,
+            annotations: normalizeStepAnnotations(step.cropRestoreState.annotations),
+            asset: {
+              ...step.cropRestoreState.asset,
+              appUrl: resolveAssetUrl(step.cropRestoreState.asset)
+            }
+          }
+        : null,
       asset: step.asset
         ? {
             ...step.asset,
@@ -710,6 +720,26 @@ export const useWorkbenchStore = defineStore("workbench", () => {
     saveMessage.value = `Cropped ${result.asset.displayLabel}`;
   }
 
+  async function restoreStepAsset(stepId: string): Promise<void> {
+    if (!currentProject.value) {
+      return;
+    }
+
+    const result = await window.easydo.projects.restoreStepAsset({
+      project: toPlainProject(currentProject.value),
+      stepId
+    });
+
+    if (!result) {
+      saveMessage.value = "Nothing to restore";
+      return;
+    }
+
+    currentProject.value = normalizeProject(result.project);
+    await refreshLibrary();
+    saveMessage.value = `Restored ${result.asset.displayLabel}`;
+  }
+
   async function recognizeStepText(
     stepId: string,
     selection?: { x: number; y: number; width: number; height: number } | null
@@ -1035,6 +1065,7 @@ export const useWorkbenchStore = defineStore("workbench", () => {
     importImagesAsSteps,
     importAnnotationAsset,
     cropStepAsset,
+    restoreStepAsset,
     recognizeStepText,
     copyOcrResult,
     toggleOcr,

@@ -204,6 +204,12 @@ export interface StepAnnotation {
   asset?: StepAssetRef | null;
 }
 
+export interface StepCropRestoreState {
+  asset: StepAssetRef;
+  annotations: StepAnnotation[];
+  capturedAt?: string | null;
+}
+
 export type StepTextBlockPosition =
   | "before-title"
   | "after-title"
@@ -248,6 +254,7 @@ export interface StepDraft {
   textBlocks?: StepTextBlock[] | null;
   settings?: StepSettings | null;
   asset?: StepAssetRef | null;
+  cropRestoreState?: StepCropRestoreState | null;
   capturedAt?: string | null;
 }
 
@@ -406,6 +413,17 @@ export interface CropStepAssetResult {
   asset: StepAssetRef;
 }
 
+export interface RestoreStepAssetInput {
+  project: ProjectDraft;
+  stepId: string;
+}
+
+export interface RestoreStepAssetResult {
+  project: ProjectDraft;
+  step: StepDraft;
+  asset: StepAssetRef;
+}
+
 export interface CreateFolderInput {
   name: string;
 }
@@ -501,6 +519,7 @@ export interface EasyDoApi {
     getOcrLanguages: () => Promise<OcrLanguageOption[]>;
     recognizeStepText: (input: RecognizeStepTextInput) => Promise<OcrRecognitionResult | null>;
     cropStepAsset: (input: CropStepAssetInput) => Promise<CropStepAssetResult | null>;
+    restoreStepAsset: (input: RestoreStepAssetInput) => Promise<RestoreStepAssetResult | null>;
     createFolder: (input: CreateFolderInput) => Promise<ProjectFolder>;
     renameFolder: (input: RenameFolderInput) => Promise<ProjectFolder | null>;
     deleteFolder: (input: DeleteFolderInput) => Promise<void>;

@@ -152,6 +152,18 @@ function normalizeProject(project: ProjectDraft): ProjectDraft {
         ...defaultStepSettings(step.kind),
         ...(step.settings ?? {})
       },
+      cropRestoreState: step.cropRestoreState
+        ? {
+            ...step.cropRestoreState,
+            annotations: normalizeStepAnnotations(step.cropRestoreState.annotations),
+            asset: {
+              ...step.cropRestoreState.asset,
+              appUrl:
+                step.cropRestoreState.asset.appUrl ||
+                toAssetAppUrl(step.cropRestoreState.asset.absolutePath)
+            }
+          }
+        : null,
       annotations: normalizeStepAnnotations(step.annotations).map((annotation) => ({
         ...annotation,
         asset: annotation.asset
@@ -592,6 +604,11 @@ export class ProjectService {
     const nextStep: StepDraft = {
       ...step,
       asset,
+      cropRestoreState: {
+        asset: step.asset,
+        annotations: normalizeStepAnnotations(step.annotations),
+        capturedAt: step.capturedAt ?? null
+      },
       annotations: cropStepAnnotations(step.annotations, input.selection),
       capturedAt: now
     };
@@ -610,6 +627,44 @@ export class ProjectService {
       project: nextProject,
       step: nextProject.steps[stepIndex],
       asset
+    };
+  }
+
+  async restoreStepAsset(input: import("@shared/contracts").RestoreStepAssetInput): Promise<import("@shared/contracts").RestoreStepAssetResult | null> {
+    const persistedProject = await this.save({
+      project: input.project
+    });
+    const stepIndex = persistedProject.steps.findIndex((step) => step.id === input.stepId);
+    const step = persistedProject.steps[stepIndex];
+
+    if (!step?.cropRestoreState?.asset) {
+      return null;
+    }
+
+    const now = new Date().toISOString();
+    const restoreState = step.cropRestoreState;
+    const nextStep: StepDraft = {
+      ...step,
+      asset: restoreState.asset,
+      annotations: normalizeStepAnnotations(restoreState.annotations),
+      cropRestoreState: null,
+      capturedAt: restoreState.capturedAt ?? step.capturedAt ?? now
+    };
+
+    const nextSteps = [...persistedProject.steps];
+    nextSteps[stepIndex] = nextStep;
+    const nextProject = await this.save({
+      project: {
+        ...persistedProject,
+        steps: nextSteps,
+        updatedAt: now
+      }
+    });
+
+    return {
+      project: nextProject,
+      step: nextProject.steps[stepIndex],
+      asset: nextProject.steps[stepIndex]?.asset ?? restoreState.asset
     };
   }
 

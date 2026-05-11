@@ -134,6 +134,7 @@ const api: EasyDoApi = {
     getOcrLanguages: () => ipcRenderer.invoke("projects:get-ocr-languages"),
     recognizeStepText: (input) => ipcRenderer.invoke("projects:recognize-step-text", input),
     cropStepAsset: (input) => ipcRenderer.invoke("projects:crop-step-asset", input),
+    restoreStepAsset: (input) => ipcRenderer.invoke("projects:restore-step-asset", input),
     createFolder: (input: CreateFolderInput) => ipcRenderer.invoke("projects:create-folder", input),
     renameFolder: (input: RenameFolderInput) => ipcRenderer.invoke("projects:rename-folder", input),
     deleteFolder: (input: DeleteFolderInput) => ipcRenderer.invoke("projects:delete-folder", input)

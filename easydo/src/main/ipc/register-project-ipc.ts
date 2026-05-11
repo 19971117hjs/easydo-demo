@@ -47,6 +47,9 @@ export function registerProjectIpc(projectService: ProjectService, ocrService: O
   ipcMain.handle("projects:crop-step-asset", (_event, input) =>
     projectService.cropStepAsset(input)
   );
+  ipcMain.handle("projects:restore-step-asset", (_event, input) =>
+    projectService.restoreStepAsset(input)
+  );
   ipcMain.handle("projects:create-folder", (_event, input: CreateFolderInput) =>
     projectService.createFolder(input)
   );

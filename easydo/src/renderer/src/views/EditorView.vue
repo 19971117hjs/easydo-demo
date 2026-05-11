@@ -230,6 +230,9 @@ const clickStreamActive = computed(
     workbench.clickStreamStatus !== 'stopped'
 );
 const selectedStepAsset = computed(() => selectedStep.value?.asset ?? null);
+const canRestoreCroppedAsset = computed(() =>
+  Boolean(selectedStep.value?.cropRestoreState?.asset)
+);
 const resolvedZoom = computed(() =>
   zoomMode.value === 'fit' ? fitZoom.value : manualZoom.value
 );
@@ -782,6 +785,19 @@ async function exportSelectedImage(): Promise<void> {
   }
 
   await window.easydo.exports.openPath(selectedStepAsset.value.absolutePath);
+}
+
+async function restoreSelectedStepCrop(): Promise<void> {
+  imageActionsMenuOpen.value = false;
+
+  if (!selectedStep.value || !canRestoreCroppedAsset.value) {
+    return;
+  }
+
+  await workbench.restoreStepAsset(selectedStep.value.id);
+  selectedAnnotationId.value = null;
+  activeTool.value = 'select';
+  void refreshFitZoom();
 }
 
 async function runStepImageAction(
@@ -1583,6 +1599,13 @@ onUnmounted(() => {
                 >
                   Open current screenshot
                 </button>
+                <button
+                  type="button"
+                  :disabled="!canRestoreCroppedAsset"
+                  @click="restoreSelectedStepCrop()"
+                >
+                  Restore cropped image
+                </button>
               </div>
             </div>
 
@@ -1593,6 +1616,14 @@ onUnmounted(() => {
               @click="exportSelectedImage()"
             >
               Export image
+            </button>
+            <button
+              v-if="canRestoreCroppedAsset"
+              class="toolbar-button"
+              type="button"
+              @click="restoreSelectedStepCrop()"
+            >
+              Restore crop
             </button>
           </div>
 
