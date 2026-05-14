@@ -1544,14 +1544,14 @@ onUnmounted(() => {
               <span>Add Step</span>
             </button>
 
-            <button
+            <!-- <button
               class="ghost-icon-button"
               type="button"
               title="More actions"
               aria-label="More actions"
             >
               <span class="ui-icon ui-icon--more" aria-hidden="true"></span>
-            </button>
+            </button> -->
 
             <div v-if="addStepMenuOpen" class="add-step-menu">
               <button type="button" @click="runAddStepAction('click-capture')">
@@ -1796,14 +1796,14 @@ onUnmounted(() => {
               ></span>
               <span>Focused view</span>
             </button>
-            <button
+            <!-- <button
               class="toolbar-button toolbar-button--danger"
               type="button"
               :disabled="!selectedAnnotation"
               @click="removeSelectedAnnotation()"
             >
               Delete annotation
-            </button>
+            </button> -->
           </div>
         </div>
 
@@ -3310,13 +3310,14 @@ onUnmounted(() => {
   right: 12px;
   top: calc(100% - 2px);
   z-index: 15;
-  padding: 8px;
+  padding: 4px;
   border: 1px solid #d8dce3;
   border-radius: 8px;
   background: #fff;
   box-shadow: 0 10px 24px rgba(31, 39, 51, 0.1);
   display: grid;
-  gap: 4px;
+  font-size: 9px;
+  /* gap: 4px; */
 }
 
 .add-step-menu button {
@@ -3517,7 +3518,7 @@ onUnmounted(() => {
 .toolbar-menu {
   position: absolute;
   z-index: 20;
-  min-width: 220px;
+  min-width: 120px;
   padding: 4px;
   border: 1px solid #d9dde4;
   border-radius: 8px;
@@ -3526,6 +3527,7 @@ onUnmounted(() => {
   display: grid;
   gap: 4px;
   font-size: 14px;
+  width: max-content;
 }
 
 .step-card__menu {
@@ -3766,7 +3768,7 @@ onUnmounted(() => {
   width: 100%;
   height: 100%;
   overflow: auto;
-  border: 1px solid #d8dce3;
+  /* border: 1px solid #d8dce3; */
   border-radius: 8px;
   background: #eceef1;
 }
