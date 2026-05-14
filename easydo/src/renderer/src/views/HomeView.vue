@@ -206,31 +206,47 @@ onMounted(async () => {
 <template>
   <section class="home-page" @click="menuOpen = false; actionMenuGuideId = null">
     <header class="toolbar">
-      <button class="menu-button" type="button" @click.stop="menuOpen = !menuOpen">☰ Menu</button>
+      <button class="menu-button" type="button" @click.stop="menuOpen = !menuOpen">
+        <span class="ui-icon ui-icon--menu" aria-hidden="true"></span>
+        <span>Menu</span>
+      </button>
 
       <div class="toolbar__avatar">AO</div>
     </header>
 
     <div v-if="menuOpen" class="menu-overlay" @click="closeMenu">
       <aside class="side-menu" @click.stop>
-        <button class="side-menu__close" type="button" @click="closeMenu">×</button>
+        <button class="side-menu__close" type="button" title="Close menu" aria-label="Close menu" @click="closeMenu">
+          <span class="ui-icon ui-icon--close" aria-hidden="true"></span>
+        </button>
 
         <div class="side-menu__group">
-          <button class="side-menu__item" type="button" @click="showSettings">Settings</button>
+          <button class="side-menu__item" type="button" @click="showSettings">
+            <span class="ui-icon ui-icon--settings" aria-hidden="true"></span>
+            <span>Settings</span>
+          </button>
         </div>
 
         <div class="side-menu__group">
           <button class="side-menu__item side-menu__item--highlight" type="button" @click="openExternal('https://folge.me/go/roadmap')">
-            Suggest a feature
+            <span class="ui-icon ui-icon--external" aria-hidden="true"></span>
+            <span>Suggest a feature</span>
           </button>
           <button class="side-menu__item" type="button" @click="openExternal('https://help.folge.me/')">
-            Online Help
+            <span class="ui-icon ui-icon--help" aria-hidden="true"></span>
+            <span>Online Help</span>
           </button>
         </div>
 
         <div class="side-menu__group">
-          <button class="side-menu__item" type="button" @click="checkUpdates">Check for updates</button>
-          <button class="side-menu__item" type="button" @click="openMail('hello@folge.me')">Support - hello@folge.me</button>
+          <button class="side-menu__item" type="button" @click="checkUpdates">
+            <span class="ui-icon ui-icon--check-updates" aria-hidden="true"></span>
+            <span>Check for updates</span>
+          </button>
+          <button class="side-menu__item" type="button" @click="openMail('hello@folge.me')">
+            <span class="ui-icon ui-icon--mail" aria-hidden="true"></span>
+            <span>Support - hello@folge.me</span>
+          </button>
           <div class="side-menu__version">Version: {{ appVersionLabel }}</div>
         </div>
       </aside>
@@ -239,7 +255,7 @@ onMounted(async () => {
     <main class="content">
       <section class="action-cards">
         <button class="action-card action-card--primary" type="button" @click="createGuide">
-          <span class="action-card__icon">⊕</span>
+          <span class="action-card__icon ui-icon ui-icon--plus" aria-hidden="true"></span>
           <span class="action-card__copy">
             <strong>Create Guide</strong>
             <small>Start capturing your workflows</small>
@@ -247,16 +263,15 @@ onMounted(async () => {
         </button>
 
         <button class="action-card" type="button" @click="backupGuides">
-          <span class="action-card__icon">⇥</span>
+          <span class="action-card__icon ui-icon ui-icon--backup" aria-hidden="true"></span>
           <span class="action-card__copy">
             <strong>Backup</strong>
             <small>Backup guide(s) into .flgg files</small>
           </span>
-          <span class="action-card__tail">↓</span>
         </button>
 
         <button class="action-card" type="button" @click="restoreGuides">
-          <span class="action-card__icon">⇤</span>
+          <span class="action-card__icon ui-icon ui-icon--restore" aria-hidden="true"></span>
           <span class="action-card__copy">
             <strong>Restore</strong>
             <small>Restore backuped guide(s) from .flgg files</small>
@@ -270,12 +285,12 @@ onMounted(async () => {
 
           <div class="guides-panel__controls">
             <button class="folder-button" type="button" @click.stop="createFolder">
-              <span>⊞</span>
+              <span class="ui-icon ui-icon--folder-plus" aria-hidden="true"></span>
               <span>New Folder</span>
             </button>
 
             <label class="search-box">
-              <span>⌕</span>
+              <span class="ui-icon ui-icon--search" aria-hidden="true"></span>
               <input
                 :value="workbench.guideSearch"
                 type="search"
@@ -288,9 +303,18 @@ onMounted(async () => {
 
         <div v-if="hasSelection" class="selection-bar">
           <span>{{ selectedIds.length }} selected</span>
-          <button type="button" @click="moveSelectedGuides">Move</button>
-          <button type="button" @click="deleteSelectedGuides">Delete</button>
-          <button type="button" @click="workbench.clearGuideSelection()">Clear</button>
+          <button type="button" @click="moveSelectedGuides">
+            <span class="ui-icon ui-icon--move-folder" aria-hidden="true"></span>
+            <span>Move</span>
+          </button>
+          <button type="button" class="selection-bar__danger" @click="deleteSelectedGuides">
+            <span class="ui-icon ui-icon--trash" aria-hidden="true"></span>
+            <span>Delete</span>
+          </button>
+          <button type="button" @click="workbench.clearGuideSelection()">
+            <span class="ui-icon ui-icon--clear" aria-hidden="true"></span>
+            <span>Clear</span>
+          </button>
         </div>
 
         <div class="guides-table">
@@ -300,14 +324,29 @@ onMounted(async () => {
             </label>
             <span class="col-favorite"></span>
             <button class="col-title col-button" type="button" @click="toggleTitleSort">
-              Title <em>{{ titleSortDescending ? "↓" : "↑" }}</em>
+              <span>Title</span>
+              <span
+                class="ui-icon"
+                :class="titleSortDescending ? 'ui-icon--sort-desc' : 'ui-icon--sort-asc'"
+                aria-hidden="true"
+              ></span>
             </button>
             <span class="col-steps"></span>
             <button class="col-updated col-button" type="button" @click="toggleUpdatedSort">
-              Updated <em>{{ updatedSortAscending ? "↑" : "↓" }}</em>
+              <span>Updated</span>
+              <span
+                class="ui-icon"
+                :class="updatedSortAscending ? 'ui-icon--sort-asc' : 'ui-icon--sort-desc'"
+                aria-hidden="true"
+              ></span>
             </button>
             <button class="col-created col-button" type="button" @click="toggleCreatedSort">
-              Created <em>{{ createdSortAscending ? "↑" : "↓" }}</em>
+              <span>Created</span>
+              <span
+                class="ui-icon"
+                :class="createdSortAscending ? 'ui-icon--sort-asc' : 'ui-icon--sort-desc'"
+                aria-hidden="true"
+              ></span>
             </button>
             <span class="col-actions"></span>
           </div>
@@ -322,8 +361,18 @@ onMounted(async () => {
                 />
               </label>
 
-              <button class="guide-row__favorite" type="button" @click.stop="toggleFavorite(guide)">
-                {{ guide.isFavorited ? "★" : "☆" }}
+              <button
+                class="guide-row__favorite"
+                type="button"
+                :title="guide.isFavorited ? 'Remove from favorites' : 'Add to favorites'"
+                :aria-label="guide.isFavorited ? 'Remove from favorites' : 'Add to favorites'"
+                @click.stop="toggleFavorite(guide)"
+              >
+                <span
+                  class="ui-icon"
+                  :class="guide.isFavorited ? 'ui-icon--star-filled' : 'ui-icon--star'"
+                  aria-hidden="true"
+                ></span>
               </button>
 
               <button class="guide-row__title" type="button" @click="openGuide(guide.id)">
@@ -331,7 +380,7 @@ onMounted(async () => {
               </button>
 
               <div class="guide-row__steps">
-                <span class="guide-row__steps-icon">📄</span>
+                <span class="guide-row__steps-icon ui-icon ui-icon--document" aria-hidden="true"></span>
                 <span>{{ guide.stepCount }}</span>
               </div>
 
@@ -342,16 +391,30 @@ onMounted(async () => {
                 <button
                   class="more-button"
                   type="button"
+                  title="Guide actions"
+                  aria-label="Guide actions"
                   @click.stop="actionMenuGuideId = actionMenuGuideId === guide.id ? null : guide.id"
                 >
-                  •••
+                  <span class="ui-icon ui-icon--more" aria-hidden="true"></span>
                 </button>
 
                 <div v-if="actionMenuGuideId === guide.id" class="row-menu" @click.stop>
-                  <button type="button" @click="renameGuide(guide)">Rename</button>
-                  <button type="button" @click="duplicateGuide(guide)">Duplicate</button>
-                  <button type="button" @click="moveGuide(guide)">Move</button>
-                  <button class="row-menu__danger" type="button" @click="deleteGuide(guide)">Delete</button>
+                  <button type="button" @click="renameGuide(guide)">
+                    <span class="ui-icon ui-icon--edit" aria-hidden="true"></span>
+                    <span>Rename</span>
+                  </button>
+                  <button type="button" @click="duplicateGuide(guide)">
+                    <span class="ui-icon ui-icon--duplicate" aria-hidden="true"></span>
+                    <span>Duplicate</span>
+                  </button>
+                  <button type="button" @click="moveGuide(guide)">
+                    <span class="ui-icon ui-icon--move-folder" aria-hidden="true"></span>
+                    <span>Move</span>
+                  </button>
+                  <button class="row-menu__danger" type="button" @click="deleteGuide(guide)">
+                    <span class="ui-icon ui-icon--trash" aria-hidden="true"></span>
+                    <span>Delete</span>
+                  </button>
                 </div>
               </div>
             </article>
@@ -364,7 +427,9 @@ onMounted(async () => {
         </div>
       </section>
 
-      <div class="help-fab">?</div>
+      <div class="help-fab" aria-label="Help">
+        <span class="ui-icon ui-icon--help" aria-hidden="true"></span>
+      </div>
     </main>
   </section>
 </template>
@@ -377,6 +442,108 @@ onMounted(async () => {
   background: #ffffff;
   color: #222730;
   overflow: hidden;
+}
+
+.ui-icon {
+  width: 16px;
+  height: 16px;
+  display: inline-block;
+  flex: none;
+  background: currentColor;
+  mask: var(--ui-icon) center / contain no-repeat;
+  -webkit-mask: var(--ui-icon) center / contain no-repeat;
+}
+
+.ui-icon--backup {
+  --ui-icon: url('/folge-icons/ui-backup.svg');
+}
+
+.ui-icon--check-updates {
+  --ui-icon: url('/folge-icons/ui-check-updates.svg');
+}
+
+.ui-icon--clear {
+  --ui-icon: url('/folge-icons/ui-clear.svg');
+}
+
+.ui-icon--close {
+  --ui-icon: url('/folge-icons/ui-close.svg');
+}
+
+.ui-icon--document {
+  --ui-icon: url('/folge-icons/ui-document.svg');
+}
+
+.ui-icon--duplicate {
+  --ui-icon: url('/folge-icons/ui-duplicate.svg');
+}
+
+.ui-icon--edit {
+  --ui-icon: url('/folge-icons/ui-edit.svg');
+}
+
+.ui-icon--external {
+  --ui-icon: url('/folge-icons/ui-external.svg');
+}
+
+.ui-icon--folder-plus {
+  --ui-icon: url('/folge-icons/ui-folder-plus.svg');
+}
+
+.ui-icon--help {
+  --ui-icon: url('/folge-icons/ui-help-circle.svg');
+}
+
+.ui-icon--mail {
+  --ui-icon: url('/folge-icons/ui-mail.svg');
+}
+
+.ui-icon--menu {
+  --ui-icon: url('/folge-icons/ui-menu.svg');
+}
+
+.ui-icon--more {
+  --ui-icon: url('/folge-icons/ui-more.svg');
+}
+
+.ui-icon--move-folder {
+  --ui-icon: url('/folge-icons/ui-move-folder.svg');
+}
+
+.ui-icon--plus {
+  --ui-icon: url('/folge-icons/ui-plus.svg');
+}
+
+.ui-icon--restore {
+  --ui-icon: url('/folge-icons/ui-restore.svg');
+}
+
+.ui-icon--search {
+  --ui-icon: url('/folge-icons/ui-search.svg');
+}
+
+.ui-icon--settings {
+  --ui-icon: url('/folge-icons/ui-settings.svg');
+}
+
+.ui-icon--sort-asc {
+  --ui-icon: url('/folge-icons/ui-sort-asc.svg');
+}
+
+.ui-icon--sort-desc {
+  --ui-icon: url('/folge-icons/ui-sort-desc.svg');
+}
+
+.ui-icon--star {
+  --ui-icon: url('/folge-icons/ui-star.svg');
+}
+
+.ui-icon--star-filled {
+  --ui-icon: url('/folge-icons/ui-star-filled.svg');
+}
+
+.ui-icon--trash {
+  --ui-icon: url('/folge-icons/ui-trash.svg');
 }
 
 .toolbar {
@@ -438,8 +605,8 @@ onMounted(async () => {
   border: none;
   background: transparent;
   color: #9da5ae;
-  font-size: 1.8rem;
-  line-height: 1;
+  display: grid;
+  place-items: center;
 }
 
 .side-menu__group {
@@ -456,7 +623,8 @@ onMounted(async () => {
   color: #1f2731;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
+  gap: 10px;
   text-align: left;
   font-size: 0.94rem;
 }
@@ -507,8 +675,9 @@ onMounted(async () => {
 }
 
 .action-card__icon {
+  width: 20px;
+  height: 20px;
   color: #29313b;
-  font-size: 1.05rem;
 }
 
 .action-card--primary .action-card__icon {
@@ -574,6 +743,13 @@ onMounted(async () => {
   background: #ffffff;
   color: #2f3741;
   font: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.selection-bar__danger {
+  color: #b23b3b !important;
 }
 
 .guides-panel__controls {
@@ -593,6 +769,12 @@ onMounted(async () => {
   align-items: center;
   gap: 6px;
   font: inherit;
+}
+
+.folder-button .ui-icon,
+.search-box .ui-icon {
+  width: 15px;
+  height: 15px;
 }
 
 .search-box {
@@ -644,6 +826,14 @@ onMounted(async () => {
   color: inherit;
   font: inherit;
   text-align: left;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.col-button .ui-icon {
+  width: 14px;
+  height: 14px;
 }
 
 .col-select,
@@ -659,15 +849,6 @@ onMounted(async () => {
 
 .col-title {
   padding-left: 6px;
-}
-
-.col-title em,
-.col-updated em,
-.col-created em {
-  font-style: normal;
-  margin-left: 10px;
-  font-size: 1.1rem;
-  color: #627081;
 }
 
 .guides-table__body {
@@ -692,11 +873,22 @@ onMounted(async () => {
 }
 
 .guide-row__favorite {
+  width: 30px;
+  height: 30px;
   border: none;
   background: transparent;
   color: #1c2530;
-  font-size: 1.15rem;
-  text-align: center;
+  display: grid;
+  place-items: center;
+}
+
+.guide-row__favorite .ui-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.guide-row__favorite .ui-icon--star-filled {
+  color: #f2b91f;
 }
 
 .guide-row__title {
@@ -716,7 +908,9 @@ onMounted(async () => {
 }
 
 .guide-row__steps-icon {
-  font-size: 0.92rem;
+  width: 15px;
+  height: 15px;
+  color: #607086;
 }
 
 .guide-row__updated,
@@ -745,7 +939,8 @@ onMounted(async () => {
   border-radius: 6px;
   background: #ffffff;
   color: #28313b;
-  font-size: 0.95rem;
+  display: grid;
+  place-items: center;
 }
 
 .row-menu {
@@ -755,7 +950,7 @@ onMounted(async () => {
   z-index: 10;
   display: grid;
   gap: 4px;
-  min-width: 112px;
+  min-width: 136px;
   padding: 6px;
   border: 1px solid #d8dde3;
   border-radius: 8px;
@@ -772,6 +967,14 @@ onMounted(async () => {
   text-align: left;
   font: inherit;
   color: #26303a;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.row-menu button .ui-icon {
+  width: 15px;
+  height: 15px;
 }
 
 .row-menu button:hover {
@@ -806,7 +1009,6 @@ onMounted(async () => {
   place-items: center;
   background: #000000;
   color: #ffffff;
-  font-weight: 700;
 }
 
 @media (max-width: 1100px) {
