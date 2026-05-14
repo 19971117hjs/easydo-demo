@@ -254,6 +254,7 @@ export interface StepDraft {
   textBlocks?: StepTextBlock[] | null;
   settings?: StepSettings | null;
   asset?: StepAssetRef | null;
+  cropRestoreHistory?: StepCropRestoreState[] | null;
   cropRestoreState?: StepCropRestoreState | null;
   capturedAt?: string | null;
 }

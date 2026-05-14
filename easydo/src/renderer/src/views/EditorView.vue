@@ -11,6 +11,7 @@ import type {
   StepSettings,
   StepStatus,
 } from '@shared/contracts';
+import CropAdjustDialog from '@renderer/components/CropAdjustDialog.vue';
 import RichTextEditor from '@renderer/components/RichTextEditor.vue';
 import ScreenshotAnnotator from '@renderer/components/ScreenshotAnnotator.vue';
 import { useEditorUiPrefs } from '@renderer/features/editor/useEditorUiPrefs';
@@ -20,6 +21,12 @@ import { useWorkbenchStore } from '@renderer/stores/workbench';
 import { getAnnotationBounds } from '@shared/step-annotations';
 
 type AnnotationTool = 'select' | 'crop' | 'ocr' | StepAnnotationType;
+type CropSelection = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
 type AddStepAction =
   | 'click-capture'
   | 'simple-capture'
@@ -163,6 +170,7 @@ const exportMenuOpen = ref(false);
 const previewOpen = ref(false);
 const previewLoading = ref(false);
 const introActionError = ref('');
+const cropDialogSelection = ref<CropSelection | null>(null);
 const zoomMode = ref<'fit' | 'manual'>('fit');
 const manualZoom = ref(100);
 const fitZoom = ref(100);
@@ -230,9 +238,18 @@ const clickStreamActive = computed(
     workbench.clickStreamStatus !== 'stopped'
 );
 const selectedStepAsset = computed(() => selectedStep.value?.asset ?? null);
-const canRestoreCroppedAsset = computed(() =>
-  Boolean(selectedStep.value?.cropRestoreState?.asset)
+const cropUndoCount = computed(
+  () =>
+    selectedStep.value?.cropRestoreHistory?.length ??
+    (selectedStep.value?.cropRestoreState ? 1 : 0)
 );
+const canRestoreCroppedAsset = computed(() =>
+  cropUndoCount.value > 0
+);
+const cropDialogStep = computed(() =>
+  cropDialogSelection.value && selectedStep.value?.asset ? selectedStep.value : null
+);
+const cropDialogAsset = computed(() => cropDialogStep.value?.asset ?? null);
 const resolvedZoom = computed(() =>
   zoomMode.value === 'fit' ? fitZoom.value : manualZoom.value
 );
@@ -683,17 +700,29 @@ async function handleCropRequest(selection: {
     return;
   }
 
-  // Show confirmation dialog
-  const confirmed = window.confirm(
-    '确认裁切？裁切后标注会根据新的图片范围重新计算。\n\n点击"确定"继续，"取消"放弃裁切。'
-  );
+  cropDialogSelection.value = selection;
+  activeTool.value = 'select';
+}
 
-  if (!confirmed) {
-    activeTool.value = 'select';
+function cancelCropDialog(): void {
+  cropDialogSelection.value = null;
+  activeTool.value = 'select';
+}
+
+async function applyCropDialog(selection: CropSelection): Promise<void> {
+  if (!selectedStep.value?.asset) {
+    cancelCropDialog();
     return;
   }
 
-  await workbench.cropStepAsset(selectedStep.value.id, selection);
+  const plainSelection = {
+    x: selection.x,
+    y: selection.y,
+    width: selection.width,
+    height: selection.height,
+  };
+  cropDialogSelection.value = null;
+  await workbench.cropStepAsset(selectedStep.value.id, plainSelection);
   selectedAnnotationId.value = null;
   activeTool.value = 'select';
   void refreshFitZoom();
@@ -917,6 +946,20 @@ function handleWindowKeydown(event: KeyboardEvent): void {
     return;
   }
 
+  if (cropDialogSelection.value) {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      cancelCropDialog();
+    }
+
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      void applyCropDialog(cropDialogSelection.value);
+    }
+
+    return;
+  }
+
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
     event.preventDefault();
     void saveCurrentProject();
@@ -997,6 +1040,7 @@ watch(
   () => selectedStep.value?.id,
   () => {
     selectedAnnotationId.value = null;
+    cropDialogSelection.value = null;
     activeTool.value = 'select';
     stepMenuOpenId.value = null;
     void refreshFitZoom();
@@ -1604,7 +1648,7 @@ onUnmounted(() => {
                   :disabled="!canRestoreCroppedAsset"
                   @click="restoreSelectedStepCrop()"
                 >
-                  Restore cropped image
+                  Undo crop
                 </button>
               </div>
             </div>
@@ -1621,9 +1665,10 @@ onUnmounted(() => {
               v-if="canRestoreCroppedAsset"
               class="toolbar-button"
               type="button"
+              :title="`${cropUndoCount} crop step${cropUndoCount === 1 ? '' : 's'} available`"
               @click="restoreSelectedStepCrop()"
             >
-              Restore crop
+              Undo crop
             </button>
           </div>
 
@@ -2466,6 +2511,17 @@ onUnmounted(() => {
         ></div>
       </aside>
     </section>
+
+    <CropAdjustDialog
+      v-if="cropDialogStep && cropDialogAsset && cropDialogSelection"
+      :image-src="selectedStepAssetUrl"
+      :image-alt="cropDialogStep.title"
+      :image-width="cropDialogAsset.width"
+      :image-height="cropDialogAsset.height"
+      :initial-selection="cropDialogSelection"
+      @apply="applyCropDialog"
+      @cancel="cancelCropDialog"
+    />
 
     <div
       v-if="previewOpen"

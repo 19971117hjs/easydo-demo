@@ -17,6 +17,7 @@ import type {
   ProjectThemeTone,
   StepAnnotation,
   StepDraft,
+  StepCropRestoreState,
   StepTextBlock
 } from "@shared/contracts";
 import { resolveAssetUrl } from "@renderer/utils/asset-url";
@@ -93,6 +94,27 @@ function normalizeTextBlock(block: StepTextBlock): StepTextBlock {
   };
 }
 
+function normalizeCropRestoreState(state: StepCropRestoreState): StepCropRestoreState {
+  return {
+    ...state,
+    annotations: normalizeStepAnnotations(state.annotations),
+    asset: {
+      ...state.asset,
+      appUrl: resolveAssetUrl(state.asset)
+    }
+  };
+}
+
+function getCropRestoreHistory(step: StepDraft): StepCropRestoreState[] {
+  const history = step.cropRestoreHistory?.length
+    ? step.cropRestoreHistory
+    : step.cropRestoreState
+      ? [step.cropRestoreState]
+      : [];
+
+  return history.map((state) => normalizeCropRestoreState(state));
+}
+
 function normalizeProject(project: ProjectDraft): ProjectDraft {
   return {
     ...project,
@@ -121,16 +143,8 @@ function normalizeProject(project: ProjectDraft): ProjectDraft {
         showStepNumber: step.kind !== "content",
         ...(step.settings ?? {})
       },
-      cropRestoreState: step.cropRestoreState
-        ? {
-            ...step.cropRestoreState,
-            annotations: normalizeStepAnnotations(step.cropRestoreState.annotations),
-            asset: {
-              ...step.cropRestoreState.asset,
-              appUrl: resolveAssetUrl(step.cropRestoreState.asset)
-            }
-          }
-        : null,
+      cropRestoreHistory: getCropRestoreHistory(step),
+      cropRestoreState: getCropRestoreHistory(step).at(-1) ?? null,
       asset: step.asset
         ? {
             ...step.asset,

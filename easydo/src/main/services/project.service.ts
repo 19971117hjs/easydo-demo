@@ -28,9 +28,12 @@ import type {
   StepAssetRef,
   StepDraft,
   StepSettings,
-  UpdateProjectMetaInput,
   MoveProjectsInput,
-  StepAnnotation
+  RestoreStepAssetInput,
+  RestoreStepAssetResult,
+  StepAnnotation,
+  StepCropRestoreState,
+  UpdateProjectMetaInput
 } from "@shared/contracts";
 import { createAnnotationId, cropStepAnnotations, normalizeStepAnnotations } from "@shared/step-annotations";
 import { htmlToPlainText, normalizeNotesHtml } from "@shared/step-content";
@@ -152,18 +155,8 @@ function normalizeProject(project: ProjectDraft): ProjectDraft {
         ...defaultStepSettings(step.kind),
         ...(step.settings ?? {})
       },
-      cropRestoreState: step.cropRestoreState
-        ? {
-            ...step.cropRestoreState,
-            annotations: normalizeStepAnnotations(step.cropRestoreState.annotations),
-            asset: {
-              ...step.cropRestoreState.asset,
-              appUrl:
-                step.cropRestoreState.asset.appUrl ||
-                toAssetAppUrl(step.cropRestoreState.asset.absolutePath)
-            }
-          }
-        : null,
+      cropRestoreHistory: getCropRestoreHistory(step),
+      cropRestoreState: getCropRestoreHistory(step).at(-1) ?? null,
       annotations: normalizeStepAnnotations(step.annotations).map((annotation) => ({
         ...annotation,
         asset: annotation.asset
@@ -180,6 +173,36 @@ function normalizeProject(project: ProjectDraft): ProjectDraft {
           }
         : step.asset
     }))
+  };
+}
+
+function normalizeCropRestoreState(state: StepCropRestoreState): StepCropRestoreState {
+  return {
+    ...state,
+    annotations: normalizeStepAnnotations(state.annotations),
+    asset: {
+      ...state.asset,
+      appUrl: state.asset.appUrl || toAssetAppUrl(state.asset.absolutePath)
+    }
+  };
+}
+
+function getCropRestoreHistory(step: StepDraft): StepCropRestoreState[] {
+  const history = step.cropRestoreHistory?.length
+    ? step.cropRestoreHistory
+    : step.cropRestoreState
+      ? [step.cropRestoreState]
+      : [];
+
+  return history.map((state) => normalizeCropRestoreState(state));
+}
+
+function withCropRestoreHistory(step: StepDraft, history: StepCropRestoreState[]): StepDraft {
+  const normalizedHistory = history.map((state) => normalizeCropRestoreState(state));
+  return {
+    ...step,
+    cropRestoreHistory: normalizedHistory,
+    cropRestoreState: normalizedHistory.at(-1) ?? null
   };
 }
 
@@ -601,17 +624,22 @@ export class ProjectService {
       displayLabel: `${step.asset.displayLabel} (cropped)`
     };
 
-    const nextStep: StepDraft = {
-      ...step,
-      asset,
-      cropRestoreState: {
-        asset: step.asset,
-        annotations: normalizeStepAnnotations(step.annotations),
-        capturedAt: step.capturedAt ?? null
+    const nextStep = withCropRestoreHistory(
+      {
+        ...step,
+        asset,
+        annotations: cropStepAnnotations(step.annotations, input.selection),
+        capturedAt: now
       },
-      annotations: cropStepAnnotations(step.annotations, input.selection),
-      capturedAt: now
-    };
+      [
+        ...getCropRestoreHistory(step),
+        {
+          asset: step.asset,
+          annotations: normalizeStepAnnotations(step.annotations),
+          capturedAt: step.capturedAt ?? null
+        }
+      ]
+    );
 
     const nextSteps = [...persistedProject.steps];
     nextSteps[stepIndex] = nextStep;
@@ -630,26 +658,30 @@ export class ProjectService {
     };
   }
 
-  async restoreStepAsset(input: import("@shared/contracts").RestoreStepAssetInput): Promise<import("@shared/contracts").RestoreStepAssetResult | null> {
+  async restoreStepAsset(input: RestoreStepAssetInput): Promise<RestoreStepAssetResult | null> {
     const persistedProject = await this.save({
       project: input.project
     });
     const stepIndex = persistedProject.steps.findIndex((step) => step.id === input.stepId);
     const step = persistedProject.steps[stepIndex];
 
-    if (!step?.cropRestoreState?.asset) {
+    const history = getCropRestoreHistory(step);
+    const restoreState = history.at(-1);
+
+    if (!restoreState?.asset) {
       return null;
     }
 
     const now = new Date().toISOString();
-    const restoreState = step.cropRestoreState;
-    const nextStep: StepDraft = {
-      ...step,
-      asset: restoreState.asset,
-      annotations: normalizeStepAnnotations(restoreState.annotations),
-      cropRestoreState: null,
-      capturedAt: restoreState.capturedAt ?? step.capturedAt ?? now
-    };
+    const nextStep = withCropRestoreHistory(
+      {
+        ...step,
+        asset: restoreState.asset,
+        annotations: normalizeStepAnnotations(restoreState.annotations),
+        capturedAt: restoreState.capturedAt ?? step.capturedAt ?? now
+      },
+      history.slice(0, -1)
+    );
 
     const nextSteps = [...persistedProject.steps];
     nextSteps[stepIndex] = nextStep;
