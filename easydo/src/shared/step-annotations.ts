@@ -632,26 +632,14 @@ export function isAreaAnnotation(type: StepAnnotationType): boolean {
 function renderClickMarkup(annotation: StepAnnotation, width: number, height: number): string {
   const x = clampUnit(annotation.x) * width;
   const y = clampUnit(annotation.y) * height;
-  const radius = Math.max(44, Math.round(Math.min(width, height) * 0.04));
-  const ringRadius = Math.round(radius * 0.64);
-  const cursorWidth = Math.max(56, Math.round(radius * 1.15));
-  const cursorHeight = Math.round(cursorWidth * 1.26);
-  const cursorLeft = Math.max(0, Math.min(width - cursorWidth, x - 20));
-  const cursorTop = Math.max(0, Math.min(height - cursorHeight, y + 12));
   const badgeSize = Math.max(30, Math.min(42, Math.round((annotation.fontSize ?? 16) * 2)));
-  const badgeRadius = Math.round(badgeSize / 2);
-  const badgeX = Math.max(16, Math.min(width - badgeSize - 16, x + radius * 0.52));
-  const badgeY = Math.max(16, Math.min(height - badgeSize - 16, y - radius * 0.92));
 
   return `
-    <circle cx="${x}" cy="${y}" r="${radius}" fill="rgba(241, 200, 64, 0.42)" filter="url(#annotationGlow)" />
-    <circle cx="${x}" cy="${y}" r="${ringRadius}" fill="rgba(241, 200, 64, 0.16)" stroke="rgba(241, 200, 64, 0.88)" stroke-width="2" />
-    <rect x="${badgeX}" y="${badgeY}" rx="${badgeRadius}" ry="${badgeRadius}" width="${badgeSize}" height="${badgeSize}" fill="rgba(18,24,30,0.88)" stroke="rgba(255,255,255,0.92)" stroke-width="1.5" />
-    <text x="${badgeX + badgeSize / 2}" y="${badgeY + badgeSize * 0.66}" text-anchor="middle" font-family="Avenir Next, Arial, sans-serif" font-size="${Math.max(
+    <circle cx="${x}" cy="${y}" r="${badgeSize / 2}" fill="rgba(18,24,30,0.92)" stroke="rgba(255,255,255,0.92)" stroke-width="1.6" />
+    <text x="${x}" y="${y + badgeSize * 0.16}" text-anchor="middle" font-family="Avenir Next, Arial, sans-serif" font-size="${Math.max(
       15,
       Math.round((annotation.fontSize ?? 16) * 1.05)
     )}" font-weight="700" fill="#ffffff">${annotation.number ?? ""}</text>
-    ${renderCursorMarkup(annotation, cursorLeft, cursorTop, cursorWidth, cursorHeight)}
   `;
 }
 
@@ -838,8 +826,8 @@ function renderSvgAnnotation(annotation: StepAnnotation, width: number, height: 
         y="${y}"
         width="${annotationWidth}"
         height="${annotationHeight}"
-        rx="${Math.min(radius, 14)}"
-        ry="${Math.min(radius, 14)}"
+        rx="0"
+        ry="0"
         fill="${fill}"
         fill-opacity="${opacity}"
         stroke="${stroke}"

@@ -95,6 +95,12 @@ If any answer is "maybe", normalize before crossing IPC.
 - Do not render `file://` paths directly in the dev renderer.
 - Use the app protocol (`easydo-asset://`) for local asset display.
 
+## UI Icon Rule
+
+- Do not use plain text characters as stand-ins for button icons, such as `+`, `...`, chevrons, or layout glyphs.
+- Use SVG/icon assets for icon-only and icon-leading buttons, and pair icon-only buttons with `title` plus `aria-label`.
+- If a temporary text fallback is unavoidable, document it near the component and replace it before shipping the UI.
+
 ## Capture Workflow Notes
 
 - Whole-screen capture and area capture should both end in saved project assets plus step creation.

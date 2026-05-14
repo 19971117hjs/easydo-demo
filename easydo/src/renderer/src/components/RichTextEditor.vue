@@ -203,14 +203,21 @@ onBeforeUnmount(() => {
   <div class="rich-editor">
     <div class="rich-editor__toolbar">
       <span>Text Blocks</span>
-      <button
-        v-for="preset in textBlockPresets"
-        :key="preset.tone"
-        type="button"
-        @click="insertTextBlock(preset.tone)"
-      >
-        {{ preset.label }}
-      </button>
+      <div class="rich-editor__block-buttons">
+        <button
+          v-for="preset in textBlockPresets"
+          :key="preset.tone"
+          type="button"
+          class="rich-editor__block-button"
+          :class="`rich-editor__block-button--${preset.tone}`"
+          :title="`Insert ${preset.label} block: ${preset.description}`"
+          :aria-label="`Insert ${preset.label} text block`"
+          @click="insertTextBlock(preset.tone)"
+        >
+          <img :src="preset.iconPath" :alt="preset.label" />
+          <span>{{ preset.label }}</span>
+        </button>
+      </div>
     </div>
 
     <div v-if="isLoading" class="rich-editor__fallback">Loading Folge-style editor...</div>
@@ -230,24 +237,77 @@ onBeforeUnmount(() => {
 .rich-editor__toolbar {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 7px;
   align-items: center;
 }
 
-.rich-editor__toolbar span {
+.rich-editor__toolbar > span {
   color: #5e6a74;
-  font-size: 0.82rem;
+  font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
 
-.rich-editor__toolbar button {
-  border: 1px solid rgba(31, 44, 55, 0.12);
+.rich-editor__block-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.rich-editor__block-button {
+  height: 26px;
+  border: 1px solid rgba(31, 44, 55, 0.1);
   border-radius: 999px;
-  padding: 8px 12px;
+  padding: 0 8px 0 5px;
   background: rgba(255, 255, 255, 0.82);
   color: #31404b;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.rich-editor__block-button img {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+.rich-editor__block-button--info {
+  border-color: #b8daf5;
+  background: #eef8ff;
+  color: #2c638f;
+}
+
+.rich-editor__block-button--warning {
+  border-color: #eedf8e;
+  background: #fffbea;
+  color: #8a6615;
+}
+
+.rich-editor__block-button--success {
+  border-color: #b9e6c8;
+  background: #effbf3;
+  color: #2d744b;
+}
+
+.rich-editor__block-button--error {
+  border-color: #f1c3c3;
+  background: #fff2f2;
+  color: #9b3b3b;
+}
+
+.rich-editor__block-button--dark {
+  border-color: #d8dde4;
+  background: #f7f8fa;
+  color: #354052;
+}
+
+.rich-editor__block-button:hover {
+  filter: brightness(0.98);
 }
 
 .rich-editor__fallback {

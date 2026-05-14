@@ -197,7 +197,7 @@ export async function buildExportHtml(project: ProjectDraft): Promise<string> {
     .stepAnnotationBlur {
       position: absolute;
       border: 3px solid #f2b91f;
-      border-radius: 12px;
+      border-radius: 0;
       background: rgba(16, 24, 32, 0.22);
       box-shadow: inset 0 0 0 1px rgba(255,255,255,0.36);
     }
@@ -372,7 +372,7 @@ export async function buildPreviewHtml(project: ProjectDraft): Promise<string> {
     .stepAnnotationBlur {
       position: absolute;
       border: 3px solid #f2b91f;
-      border-radius: 12px;
+      border-radius: 0;
       background: rgba(16, 24, 32, 0.22);
       backdrop-filter: blur(11px);
       box-shadow: inset 0 0 0 1px rgba(255,255,255,0.36);

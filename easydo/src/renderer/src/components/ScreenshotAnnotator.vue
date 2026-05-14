@@ -425,7 +425,7 @@ function createAreaAnnotation(type: AreaAnnotationType, start: { x: number; y: n
       ...base,
       fillColor: "rgba(247, 196, 34, 0.34)",
       opacity: 0.34,
-      radius: 10
+      radius: 0
     };
   }
 
@@ -433,7 +433,7 @@ function createAreaAnnotation(type: AreaAnnotationType, start: { x: number; y: n
     return {
       ...base,
       blurAmount: 12,
-      radius: 12
+      radius: 0
     };
   }
 
@@ -1015,37 +1015,16 @@ function getArrowHeadPoints(annotation: StepAnnotation, fromStart = false): stri
 function getClickDisplay(annotation: StepAnnotation): {
   x: number;
   y: number;
-  radius: number;
-  ringRadius: number;
-  badgeX: number;
-  badgeY: number;
   badgeSize: number;
-  cursorLeft: number;
-  cursorTop: number;
-  cursorScale: number;
 } {
   const x = clampUnit(annotation.x) * stageWidth.value;
   const y = clampUnit(annotation.y) * stageHeight.value;
-  const radius = Math.max(28, Math.round(Math.min(stageWidth.value, stageHeight.value) * 0.038));
-  const ringRadius = Math.round(radius * 0.64);
   const badgeSize = Math.max(30, Math.min(42, Math.round((annotation.fontSize ?? 16) * 2)));
-  const cursorWidth = Math.max(42, Math.round(radius * 1.1));
-  const cursorLeft = Math.max(0, Math.min(stageWidth.value - cursorWidth, x - 16));
-  const cursorTop = Math.max(0, Math.min(stageHeight.value - cursorWidth * 1.26, y + 10));
-  const badgeX = Math.max(12, Math.min(stageWidth.value - badgeSize - 12, x + radius * 0.48));
-  const badgeY = Math.max(12, Math.min(stageHeight.value - badgeSize - 12, y - radius * 0.84));
 
   return {
     x,
     y,
-    radius,
-    ringRadius,
-    badgeX,
-    badgeY,
-    badgeSize,
-    cursorLeft,
-    cursorTop,
-    cursorScale: cursorWidth / 42
+    badgeSize
   };
 }
 
@@ -1288,32 +1267,14 @@ onBeforeUnmount(() => {
           <circle
             :cx="getClickDisplay(annotation).x"
             :cy="getClickDisplay(annotation).y"
-            :r="getClickDisplay(annotation).radius"
-            fill="rgba(241, 200, 64, 0.42)"
-            filter="url(#annotatorGlow)"
-          />
-          <circle
-            :cx="getClickDisplay(annotation).x"
-            :cy="getClickDisplay(annotation).y"
-            :r="getClickDisplay(annotation).ringRadius"
-            fill="rgba(241, 200, 64, 0.14)"
-            stroke="rgba(241, 200, 64, 0.92)"
-            stroke-width="2"
-          />
-          <rect
-            :x="getClickDisplay(annotation).badgeX"
-            :y="getClickDisplay(annotation).badgeY"
-            :width="getClickDisplay(annotation).badgeSize"
-            :height="getClickDisplay(annotation).badgeSize"
-            :rx="getClickDisplay(annotation).badgeSize / 2"
-            :ry="getClickDisplay(annotation).badgeSize / 2"
-            fill="rgba(18,24,30,0.9)"
+            :r="getClickDisplay(annotation).badgeSize / 2"
+            fill="rgba(18,24,30,0.92)"
             stroke="rgba(255,255,255,0.92)"
-            stroke-width="1.4"
+            stroke-width="1.6"
           />
           <text
-            :x="getClickDisplay(annotation).badgeX + getClickDisplay(annotation).badgeSize / 2"
-            :y="getClickDisplay(annotation).badgeY + getClickDisplay(annotation).badgeSize * 0.66"
+            :x="getClickDisplay(annotation).x"
+            :y="getClickDisplay(annotation).y + getClickDisplay(annotation).badgeSize * 0.16"
             text-anchor="middle"
             font-family="Avenir Next, Arial, sans-serif"
             :font-size="Math.max(15, Math.round((annotation.fontSize ?? 16) * 1.05))"
@@ -1322,12 +1283,6 @@ onBeforeUnmount(() => {
           >
             {{ annotation.number }}
           </text>
-          <g
-            :transform="`translate(${getClickDisplay(annotation).cursorLeft}, ${getClickDisplay(annotation).cursorTop}) scale(${getClickDisplay(annotation).cursorScale})`"
-            filter="url(#annotatorCursorShadow)"
-          >
-            <path :d="CLICK_CURSOR_PATH" fill="#ffffff" stroke="#111111" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" />
-          </g>
         </g>
 
         <g
@@ -1466,8 +1421,8 @@ onBeforeUnmount(() => {
             :y="annotation.px.y"
             :width="annotation.px.width"
             :height="annotation.px.height"
-            :rx="Math.min(annotation.radius ?? 10, 14)"
-            :ry="Math.min(annotation.radius ?? 10, 14)"
+            :rx="0"
+            :ry="0"
             :fill="annotation.fillColor || 'rgba(247, 196, 34, 0.34)'"
             :fill-opacity="annotation.opacity ?? 0.34"
             :stroke="annotation.color || '#f2b91f'"
@@ -1526,8 +1481,8 @@ onBeforeUnmount(() => {
           :y="getAnnotationBounds(draftAnnotation).y * stageHeight"
           :width="getAnnotationBounds(draftAnnotation).width * stageWidth"
           :height="getAnnotationBounds(draftAnnotation).height * stageHeight"
-          :rx="draftAnnotation.type === 'magnify' ? 999 : 12"
-          :ry="draftAnnotation.type === 'magnify' ? 999 : 12"
+          :rx="draftAnnotation.type === 'magnify' ? 999 : draftAnnotation.type === 'blur' || draftAnnotation.type === 'highlight' ? 0 : 12"
+          :ry="draftAnnotation.type === 'magnify' ? 999 : draftAnnotation.type === 'blur' || draftAnnotation.type === 'highlight' ? 0 : 12"
           :fill="draftAnnotation.type === 'blur' ? 'rgba(12,18,24,0.2)' : draftAnnotation.type === 'highlight' ? 'rgba(247, 196, 34, 0.24)' : 'rgba(255,255,255,0.04)'"
           stroke="#f2b91f"
           stroke-width="3"
@@ -1678,7 +1633,7 @@ onBeforeUnmount(() => {
 
 .annotator__blur {
   border: none;
-  border-radius: 12px;
+  border-radius: 0;
   background: rgba(200, 200, 200, 0.15);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);

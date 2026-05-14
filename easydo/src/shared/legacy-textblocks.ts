@@ -14,35 +14,35 @@ export const TEXT_BLOCK_PRESETS: TextBlockPreset[] = [
     label: "Info",
     title: "Helpful context",
     description: "Explain what the operator should notice before continuing.",
-    iconPath: "/folge-legacy/textblocks/info.svg"
+    iconPath: "folge-legacy/textblocks/info.svg"
   },
   {
     tone: "warning",
     label: "Warning",
     title: "Avoid this mistake",
     description: "Call out a risky action, destructive click, or hidden prerequisite.",
-    iconPath: "/folge-legacy/textblocks/warning.svg"
+    iconPath: "folge-legacy/textblocks/warning.svg"
   },
   {
     tone: "success",
     label: "Success",
     title: "Expected result",
     description: "Describe the exact outcome that confirms this step was completed correctly.",
-    iconPath: "/folge-legacy/textblocks/success.svg"
+    iconPath: "folge-legacy/textblocks/success.svg"
   },
   {
     tone: "error",
     label: "Error",
     title: "If something looks wrong",
     description: "Add the recovery path, troubleshooting cue, or escalation note here.",
-    iconPath: "/folge-legacy/textblocks/error.svg"
+    iconPath: "folge-legacy/textblocks/error.svg"
   },
   {
     tone: "dark",
     label: "Note",
     title: "Operator note",
     description: "Use a neutral callout for tips, clarifications, or business context.",
-    iconPath: "/folge-legacy/textblocks/dark.svg"
+    iconPath: "folge-legacy/textblocks/dark.svg"
   }
 ];
 

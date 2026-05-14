@@ -9,7 +9,6 @@ import type {
   StepAnnotationType,
   StepDraft,
   StepSettings,
-  StepStatus,
 } from '@shared/contracts';
 import CropAdjustDialog from '@renderer/components/CropAdjustDialog.vue';
 import RichTextEditor from '@renderer/components/RichTextEditor.vue';
@@ -20,7 +19,7 @@ import { getErrorMessage } from '@renderer/utils/error-message';
 import { useWorkbenchStore } from '@renderer/stores/workbench';
 import { getAnnotationBounds } from '@shared/step-annotations';
 
-type AnnotationTool = 'select' | 'crop' | 'ocr' | StepAnnotationType;
+type AnnotationTool = 'select' | 'crop' | StepAnnotationType;
 type CropSelection = {
   x: number;
   y: number;
@@ -37,25 +36,99 @@ type AddStepAction =
 const TOOL_OPTIONS: Array<{
   id: AnnotationTool;
   label: string;
-  icon: string;
+  iconSrc: string;
   hint: string;
 }> = [
-  { id: 'select', label: 'Select', icon: '⌖', hint: '选择和拖动标注' },
-  { id: 'click', label: 'Click', icon: '①', hint: '添加点击编号' },
-  { id: 'rect', label: 'Box', icon: '▭', hint: '矩形高亮' },
-  { id: 'ellipse', label: 'Oval', icon: '◯', hint: '椭圆高亮' },
-  { id: 'line', label: 'Line', icon: '／', hint: '线段指引' },
-  { id: 'brush', label: 'Brush', icon: '〰', hint: '自由笔刷路径' },
-  { id: 'arrow', label: 'Arrow', icon: '↗', hint: '箭头指引' },
-  { id: 'highlight', label: 'Highlight', icon: '▨', hint: '半透明高亮区域' },
-  { id: 'text', label: 'Text', icon: 'T', hint: '文字贴纸' },
-  { id: 'tooltip', label: 'Tooltip', icon: '💬', hint: '带箭头说明气泡' },
-  { id: 'blur', label: 'Blur', icon: '▓', hint: '模糊遮挡' },
-  { id: 'magnify', label: 'Magnify', icon: '⊕', hint: '局部放大镜' },
-  { id: 'cursor', label: 'Cursor', icon: '⌜', hint: '额外指针/输入光标' },
-  { id: 'ocr', label: 'OCR', icon: 'OCR', hint: '识别当前截图里的文字内容' },
-  { id: 'asset', label: 'Asset', icon: '▣', hint: '插入外部图片贴图' },
-  { id: 'crop', label: 'Crop', icon: '⛶', hint: '裁切当前截图并重算标注' },
+  {
+    id: 'select',
+    label: 'Select',
+    iconSrc: '/folge-icons/select.svg',
+    hint: '选择和拖动标注',
+  },
+  {
+    id: 'rect',
+    label: 'Box',
+    iconSrc: '/folge-icons/rect.svg',
+    hint: '矩形高亮',
+  },
+  {
+    id: 'ellipse',
+    label: 'Oval',
+    iconSrc: '/folge-icons/ellipse.svg',
+    hint: '椭圆高亮',
+  },
+  {
+    id: 'line',
+    label: 'Line',
+    iconSrc: '/folge-icons/line.svg',
+    hint: '线段指引',
+  },
+  {
+    id: 'arrow',
+    label: 'Arrow',
+    iconSrc: '/folge-icons/arrow.svg',
+    hint: '箭头指引',
+  },
+  {
+    id: 'tooltip',
+    label: 'Tooltip',
+    iconSrc: '/folge-icons/tooltip.svg',
+    hint: '带箭头说明气泡',
+  },
+  {
+    id: 'text',
+    label: 'Text',
+    iconSrc: '/folge-icons/text.svg',
+    hint: '文字贴纸',
+  },
+  {
+    id: 'cursor',
+    label: 'Cursor',
+    iconSrc: '/folge-icons/cursor.svg',
+    hint: '额外指针/输入光标',
+  },
+  {
+    id: 'click',
+    label: 'Click',
+    iconSrc: '/folge-icons/click.svg',
+    hint: '添加点击编号',
+  },
+  {
+    id: 'blur',
+    label: 'Blur',
+    iconSrc: '/folge-icons/blur.svg',
+    hint: '模糊遮挡',
+  },
+  {
+    id: 'brush',
+    label: 'Brush',
+    iconSrc: '/folge-icons/brush.svg',
+    hint: '自由笔刷路径',
+  },
+  {
+    id: 'highlight',
+    label: 'Highlight',
+    iconSrc: '/folge-icons/highlight.svg',
+    hint: '半透明高亮区域',
+  },
+  {
+    id: 'magnify',
+    label: 'Magnify',
+    iconSrc: '/folge-icons/magnify.svg',
+    hint: '局部放大镜',
+  },
+  {
+    id: 'crop',
+    label: 'Crop',
+    iconSrc: '/folge-icons/crop.svg',
+    hint: '裁切当前截图并重算标注',
+  },
+  {
+    id: 'asset',
+    label: 'Asset',
+    iconSrc: '/folge-icons/asset.svg',
+    hint: '插入外部图片贴图',
+  },
 ];
 
 const COLOR_PRESETS = [
@@ -243,11 +316,11 @@ const cropUndoCount = computed(
     selectedStep.value?.cropRestoreHistory?.length ??
     (selectedStep.value?.cropRestoreState ? 1 : 0)
 );
-const canRestoreCroppedAsset = computed(() =>
-  cropUndoCount.value > 0
-);
+const canRestoreCroppedAsset = computed(() => cropUndoCount.value > 0);
 const cropDialogStep = computed(() =>
-  cropDialogSelection.value && selectedStep.value?.asset ? selectedStep.value : null
+  cropDialogSelection.value && selectedStep.value?.asset
+    ? selectedStep.value
+    : null
 );
 const cropDialogAsset = computed(() => cropDialogStep.value?.asset ?? null);
 const resolvedZoom = computed(() =>
@@ -570,8 +643,16 @@ function duplicateSelectedStep(): void {
   ensureSelectedStep(nextId);
 }
 
+function confirmDelete(message: string): boolean {
+  return window.confirm(`${message}\n\nThis action cannot be undone.`);
+}
+
 function removeSelectedStep(): void {
   if (!selectedStep.value) {
+    return;
+  }
+
+  if (!confirmDelete(`Delete "${selectedStep.value.title || 'this step'}"?`)) {
     return;
   }
 
@@ -588,6 +669,10 @@ function removeSelectedStep(): void {
 
 function removeSelectedAnnotation(): void {
   if (!selectedStep.value || !selectedAnnotationId.value) {
+    return;
+  }
+
+  if (!confirmDelete('Delete this annotation?')) {
     return;
   }
 
@@ -639,12 +724,6 @@ function moveSelectedAnnotationLayer(
 }
 
 async function setActiveTool(tool: AnnotationTool): Promise<void> {
-  if (tool === 'ocr') {
-    workbench.toggleOcr();
-    activeTool.value = 'select';
-    return;
-  }
-
   if (tool === 'asset') {
     if (!selectedStep.value) {
       return;
@@ -768,7 +847,7 @@ function duplicateStepCard(step: StepDraft): void {
 }
 
 function removeStepCard(step: StepDraft): void {
-  if (!window.confirm(`Delete "${step.title || 'this step'}"?`)) {
+  if (!confirmDelete(`Delete "${step.title || 'this step'}"?`)) {
     return;
   }
 
@@ -1395,9 +1474,14 @@ onUnmounted(() => {
           v-if="leftCollapsed"
           class="panel-edge-toggle panel-edge-toggle--left"
           type="button"
+          title="Expand steps panel"
+          aria-label="Expand steps panel"
           @click="leftCollapsed = false"
         >
-          ›
+          <span
+            class="ui-icon ui-icon--collapse-right"
+            aria-hidden="true"
+          ></span>
         </button>
 
         <template v-else>
@@ -1408,18 +1492,26 @@ onUnmounted(() => {
                 type="button"
                 :class="{ 'steps-view-toggle--active': stepsListGridView }"
                 title="Step list with previews"
+                aria-label="Step list with previews"
                 @click="stepsListGridView = true"
               >
-                ☷
+                <span
+                  class="ui-icon ui-icon--view-previews"
+                  aria-hidden="true"
+                ></span>
               </button>
               <button
                 class="steps-view-toggle"
                 type="button"
                 :class="{ 'steps-view-toggle--active': !stepsListGridView }"
                 title="Step list without previews"
+                aria-label="Step list without previews"
                 @click="stepsListGridView = false"
               >
-                ▤
+                <span
+                  class="ui-icon ui-icon--view-list"
+                  aria-hidden="true"
+                ></span>
               </button>
             </div>
 
@@ -1431,9 +1523,14 @@ onUnmounted(() => {
             <button
               class="collapse-trigger"
               type="button"
+              title="Collapse steps panel"
+              aria-label="Collapse steps panel"
               @click="leftCollapsed = true"
             >
-              ‹
+              <span
+                class="ui-icon ui-icon--collapse-left"
+                aria-hidden="true"
+              ></span>
             </button>
           </div>
 
@@ -1443,7 +1540,7 @@ onUnmounted(() => {
               type="button"
               @click="addStepMenuOpen = !addStepMenuOpen"
             >
-              <span>＋</span>
+              <span class="ui-icon ui-icon--plus" aria-hidden="true"></span>
               <span>Add Step</span>
             </button>
 
@@ -1451,8 +1548,9 @@ onUnmounted(() => {
               class="ghost-icon-button"
               type="button"
               title="More actions"
+              aria-label="More actions"
             >
-              ⋯
+              <span class="ui-icon ui-icon--more" aria-hidden="true"></span>
             </button>
 
             <div v-if="addStepMenuOpen" class="add-step-menu">
@@ -1504,9 +1602,9 @@ onUnmounted(() => {
                 <span v-if="step.stepNumber" class="step-card__badge">{{
                   step.stepNumber
                 }}</span>
-                <span v-if="step.clickIndex" class="step-card__click"
+                <!-- <span v-if="step.clickIndex" class="step-card__click"
                   >#{{ step.clickIndex }}</span
-                >
+                > -->
               </div>
 
               <div class="step-card__body">
@@ -1526,9 +1624,14 @@ onUnmounted(() => {
                     <button
                       class="step-card__menu-button"
                       type="button"
+                      title="Step actions"
+                      aria-label="Step actions"
                       @click.stop="toggleStepMenu(step.id)"
                     >
-                      ⋯
+                      <span
+                        class="ui-icon ui-icon--more"
+                        aria-hidden="true"
+                      ></span>
                     </button>
 
                     <div
@@ -1607,7 +1710,11 @@ onUnmounted(() => {
           :disabled="!selectedStep?.asset"
           @click="setActiveTool(tool.id)"
         >
-          <span>{{ tool.icon }}</span>
+          <span
+            class="rail-tool__icon"
+            :style="{ '--tool-icon': `url(${tool.iconSrc})` }"
+            aria-hidden="true"
+          ></span>
         </button>
       </nav>
 
@@ -1665,7 +1772,9 @@ onUnmounted(() => {
               v-if="canRestoreCroppedAsset"
               class="toolbar-button"
               type="button"
-              :title="`${cropUndoCount} crop step${cropUndoCount === 1 ? '' : 's'} available`"
+              :title="`${cropUndoCount} crop step${
+                cropUndoCount === 1 ? '' : 's'
+              } available`"
               @click="restoreSelectedStepCrop()"
             >
               Undo crop
@@ -1752,9 +1861,14 @@ onUnmounted(() => {
                     <button
                       class="stage-controls__icon"
                       type="button"
+                      title="Zoom out"
+                      aria-label="Zoom out"
                       @click="nudgeZoom('out')"
                     >
-                      −
+                      <span
+                        class="ui-icon ui-icon--minus"
+                        aria-hidden="true"
+                      ></span>
                     </button>
                     <button
                       class="stage-controls__button"
@@ -1767,9 +1881,14 @@ onUnmounted(() => {
                     <button
                       class="stage-controls__icon"
                       type="button"
+                      title="Zoom in"
+                      aria-label="Zoom in"
                       @click="nudgeZoom('in')"
                     >
-                      ＋
+                      <span
+                        class="ui-icon ui-icon--plus"
+                        aria-hidden="true"
+                      ></span>
                     </button>
                   </div>
                 </div>
@@ -1786,7 +1905,7 @@ onUnmounted(() => {
                     :image-height="selectedStep.asset.height"
                     :zoom="resolvedZoom"
                     :annotations="selectedStep.annotations ?? []"
-                    :active-tool="activeTool === 'ocr' ? 'select' : activeTool"
+                    :active-tool="activeTool"
                     @update:annotations="updateSelectedAnnotations"
                     @update:selected-id="selectedAnnotationId = $event"
                     @update:active-tool="activeTool = $event"
@@ -1906,36 +2025,47 @@ onUnmounted(() => {
           v-if="rightCollapsed"
           class="panel-edge-toggle panel-edge-toggle--right"
           type="button"
+          title="Expand details panel"
+          aria-label="Expand details panel"
           @click="rightCollapsed = false"
         >
-          ‹
+          <span
+            class="ui-icon ui-icon--collapse-left"
+            aria-hidden="true"
+          ></span>
         </button>
 
         <template v-else>
-          <div class="panel-header">
+          <div
+            class="panel-header"
+            :aria-label="selectedStep ? stepCounterLabel : 'Guide settings'"
+          >
             <div>
               <strong>{{
                 selectedStep ? 'Step Details' : 'Guide Details'
               }}</strong>
-              <p>{{ selectedStep ? stepCounterLabel : 'Guide settings' }}</p>
+              <!-- <p>{{ selectedStep ? stepCounterLabel : 'Guide settings' }}</p> -->
             </div>
 
             <button
               class="collapse-trigger"
               type="button"
+              title="Collapse details panel"
+              aria-label="Collapse details panel"
               @click="rightCollapsed = true"
             >
-              ›
+              <span
+                class="ui-icon ui-icon--collapse-right"
+                aria-hidden="true"
+              ></span>
             </button>
           </div>
 
           <div v-if="selectedStep" class="details-body">
-            <div class="details-body__hero">
-              <button class="details-settings-button" type="button">
-                Step settings
-              </button>
+            <!-- <div class="details-body__summary">
               <span>{{ stepCounterLabel }}</span>
-            </div>
+              <strong>{{ selectedStep.kind }}</strong>
+            </div> -->
 
             <section v-if="selectedAnnotation" class="detail-section">
               <div class="detail-section__title">Annotation</div>
@@ -2310,6 +2440,7 @@ onUnmounted(() => {
                   <button
                     class="secondary-button"
                     type="button"
+                    data-icon="⤓"
                     @click="moveSelectedAnnotationLayer('back')"
                   >
                     Send to back
@@ -2317,6 +2448,7 @@ onUnmounted(() => {
                   <button
                     class="secondary-button"
                     type="button"
+                    data-icon="↓"
                     @click="moveSelectedAnnotationLayer('backward')"
                   >
                     Send backward
@@ -2324,6 +2456,7 @@ onUnmounted(() => {
                   <button
                     class="secondary-button"
                     type="button"
+                    data-icon="↑"
                     @click="moveSelectedAnnotationLayer('forward')"
                   >
                     Bring forward
@@ -2331,52 +2464,13 @@ onUnmounted(() => {
                   <button
                     class="secondary-button"
                     type="button"
+                    data-icon="⤒"
                     @click="moveSelectedAnnotationLayer('front')"
                   >
                     Bring to front
                   </button>
                 </div>
               </div>
-            </section>
-
-            <section class="detail-section">
-              <div class="detail-section__title">Step settings</div>
-
-              <label class="field">
-                <span>Status</span>
-                <select
-                  :value="selectedStep.status ?? 'default'"
-                  @change="
-                    updateSelectedStep({
-                      status: ($event.target as HTMLSelectElement)
-                        .value as StepStatus,
-                    })
-                  "
-                >
-                  <option value="default">Default</option>
-                  <option value="completed">Completed</option>
-                  <option value="skipped">Skipped</option>
-                  <option value="hidden">Hidden</option>
-                </select>
-              </label>
-
-              <label class="field">
-                <span>Step type</span>
-                <select
-                  :value="selectedStep.kind"
-                  @change="
-                    updateSelectedStep({
-                      kind: ($event.target as HTMLSelectElement)
-                        .value as StepDraft['kind'],
-                    })
-                  "
-                >
-                  <option value="action">Action</option>
-                  <option value="note">Note</option>
-                  <option value="section">Section</option>
-                  <option value="content">Content block</option>
-                </select>
-              </label>
             </section>
 
             <section class="detail-section">
@@ -2443,6 +2537,7 @@ onUnmounted(() => {
                 class="secondary-button"
                 type="button"
                 :disabled="!canMoveStepUp"
+                data-icon="↑"
                 @click="moveSelectedStep('up')"
               >
                 Move Up
@@ -2451,6 +2546,7 @@ onUnmounted(() => {
                 class="secondary-button"
                 type="button"
                 :disabled="!canMoveStepDown"
+                data-icon="↓"
                 @click="moveSelectedStep('down')"
               >
                 Move Down
@@ -2458,6 +2554,7 @@ onUnmounted(() => {
               <button
                 class="secondary-button"
                 type="button"
+                data-icon="⧉"
                 @click="duplicateSelectedStep()"
               >
                 Duplicate
@@ -2465,6 +2562,7 @@ onUnmounted(() => {
               <button
                 class="danger-button"
                 type="button"
+                data-icon="⌫"
                 @click="removeSelectedStep()"
               >
                 Delete
@@ -2635,6 +2733,44 @@ onUnmounted(() => {
   background: #fff;
   color: #2f3640;
   font: inherit;
+}
+
+.ui-icon {
+  width: 16px;
+  height: 16px;
+  display: inline-block;
+  flex: none;
+  background: currentColor;
+  mask: var(--ui-icon) center / contain no-repeat;
+  -webkit-mask: var(--ui-icon) center / contain no-repeat;
+}
+
+.ui-icon--collapse-left {
+  --ui-icon: url('/folge-icons/ui-collapse-left.svg');
+}
+
+.ui-icon--collapse-right {
+  --ui-icon: url('/folge-icons/ui-collapse-right.svg');
+}
+
+.ui-icon--minus {
+  --ui-icon: url('/folge-icons/ui-minus.svg');
+}
+
+.ui-icon--more {
+  --ui-icon: url('/folge-icons/ui-more.svg');
+}
+
+.ui-icon--plus {
+  --ui-icon: url('/folge-icons/ui-plus.svg');
+}
+
+.ui-icon--view-list {
+  --ui-icon: url('/folge-icons/ui-view-list.svg');
+}
+
+.ui-icon--view-previews {
+  --ui-icon: url('/folge-icons/ui-view-previews.svg');
 }
 
 .menu-trigger {
@@ -3098,8 +3234,8 @@ onUnmounted(() => {
 }
 
 .steps-view-toggle {
-  width: 22px;
-  height: 22px;
+  width: 28px;
+  height: 28px;
   border: none;
   border-radius: 4px;
   background: transparent;
@@ -3139,6 +3275,9 @@ onUnmounted(() => {
   height: 28px;
   border-radius: 8px;
   padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .steps-actions {
@@ -3378,14 +3517,15 @@ onUnmounted(() => {
 .toolbar-menu {
   position: absolute;
   z-index: 20;
-  min-width: 166px;
-  padding: 8px;
+  min-width: 220px;
+  padding: 4px;
   border: 1px solid #d9dde4;
   border-radius: 8px;
   background: #fff;
   box-shadow: 0 10px 24px rgba(33, 41, 54, 0.1);
   display: grid;
   gap: 4px;
+  font-size: 14px;
 }
 
 .step-card__menu {
@@ -3432,8 +3572,15 @@ onUnmounted(() => {
   padding: 0;
   display: grid;
   place-items: center;
-  font-size: 11px;
-  font-weight: 700;
+}
+
+.rail-tool__icon {
+  width: 21px;
+  height: 21px;
+  display: block;
+  background: currentColor;
+  mask: var(--tool-icon) center / contain no-repeat;
+  -webkit-mask: var(--tool-icon) center / contain no-repeat;
 }
 
 .rail-tool--active {
@@ -3774,27 +3921,30 @@ onUnmounted(() => {
   background: #fff;
 }
 
-.details-body__hero {
-  display: grid;
-  justify-items: start;
+.details-body__summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 10px;
-}
-
-.details-body__hero span {
-  color: #8a93a1;
-  font-size: 11px;
-}
-
-.details-settings-button {
-  height: 30px;
-  padding: 0 12px;
-  border: 1px solid #b9d2ff;
+  min-height: 36px;
+  padding: 9px 11px;
+  border: 1px solid #e1e6ee;
   border-radius: 8px;
-  background: #f7fbff;
-  color: #3575e9;
-  font: inherit;
+  background: linear-gradient(180deg, #fbfcfe 0%, #f5f7fa 100%);
+  color: #687383;
   font-size: 12px;
+}
+
+.details-body__summary strong {
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: #eef3f9;
+  color: #354052;
+  font-size: 10px;
   font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  text-transform: uppercase;
 }
 
 .detail-section {
@@ -3837,7 +3987,7 @@ onUnmounted(() => {
 .annotation-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 
 .annotation-swatches {
@@ -3866,18 +4016,19 @@ onUnmounted(() => {
 .annotation-layer-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  gap: 6px;
 }
 
 .field {
   display: grid;
-  gap: 6px;
+  gap: 4px;
 }
 
 .field span {
   color: #5f6a79;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
+  letter-spacing: 0.01em;
 }
 
 .field input,
@@ -3889,10 +4040,51 @@ onUnmounted(() => {
   background: #fff;
   color: inherit;
   font: inherit;
-  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.35;
+  padding: 6px 8px;
+  transition: border-color 0.14s ease, box-shadow 0.14s ease,
+    background 0.14s ease;
+}
+
+.field input:not([type='color']),
+.field select {
+  height: 30px;
+}
+
+.field input[type='color'] {
+  height: 30px;
+  padding: 2px;
+}
+
+.field select {
+  appearance: none;
+  cursor: pointer;
+  padding-right: 28px;
+  background-color: #fff;
+  background-image: url("data:image/svg+xml,%3Csvg width='16' height='16' viewBox='0 0 16 16' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M4.5 6.25L8 9.75L11.5 6.25' stroke='%235F6A79' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 14px 14px;
+}
+
+.field input:hover,
+.field select:hover,
+.field textarea:hover {
+  border-color: #c4cad3;
+  background-color: #fbfcfe;
+}
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  border-color: #7da8ee;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(78, 137, 231, 0.16);
 }
 
 .field textarea {
+  min-height: 72px;
   resize: vertical;
 }
 
@@ -3911,7 +4103,7 @@ onUnmounted(() => {
 .detail-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: 6px;
 }
 
 .preview-overlay {
@@ -3970,8 +4162,40 @@ onUnmounted(() => {
 
 .secondary-button,
 .danger-button {
-  height: 36px;
+  height: 32px;
   border-radius: 6px;
+}
+
+.details-body .secondary-button,
+.details-body .danger-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 9px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.details-body .secondary-button::before,
+.details-body .danger-button::before {
+  content: attr(data-icon);
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  display: inline-grid;
+  place-items: center;
+  background: #eef2f7;
+  color: #536170;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.details-body .danger-button::before {
+  background: #fff1f1;
+  color: #a14a4a;
 }
 
 .danger-button {
