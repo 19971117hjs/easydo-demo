@@ -13,6 +13,26 @@ const userDataDir = candidates.find((dir) => fs.existsSync(dir)) || candidates[0
 
 const pendingPdfExports = new Map();
 
+function backupInvalidJsonStoreFile(dir, fileName) {
+  const targetPath = path.join(dir, fileName);
+
+  if (!fs.existsSync(targetPath)) {
+    return;
+  }
+
+  try {
+    JSON.parse(fs.readFileSync(targetPath, "utf8"));
+  } catch (error) {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const backupPath = path.join(dir, `${fileName}.corrupt-${timestamp}.bak`);
+
+    fs.renameSync(targetPath, backupPath);
+    console.warn(
+      `[folge-runtime] moved invalid JSON store ${fileName} to ${path.basename(backupPath)}: ${error.message}`
+    );
+  }
+}
+
 function normalizeFileRef(value) {
   if (!value) {
     return null;
@@ -53,6 +73,7 @@ ipcMain.on("generatePdf", (_event, payload = {}) => {
 
 app.setName("Folge");
 app.setPath("userData", userDataDir);
+backupInvalidJsonStoreFile(userDataDir, "config.json");
 
 const PATCH_LOCAL_EXPORT_FLAGS_SCRIPT = `
 (() => {

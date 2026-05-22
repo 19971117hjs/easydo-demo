@@ -37,12 +37,6 @@
     "Sources/windows/main.cc",
     "binding.gyp"
   ],
-  "devDependencies": {
-    "ava": "^2.4.0",
-    "tsd": "^0.14.0",
-    "xo": "^0.38.2",
-    "node-pre-gyp-github": "^1.4.4"
-  },
   "optionalDependencies": {
     "@mapbox/node-pre-gyp": "^1.0.10",
     "node-addon-api": "^5.0.0",

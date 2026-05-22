@@ -91,7 +91,7 @@
     "i18next": "21.2.0",
     "image-to-base64": "2.1.1",
     "interactjs": "1.10.27",
-    "libuiohook-node": "link:./vendor-deps/libuiohook-node",
+    "libuiohook-node": "file:./vendor-deps/libuiohook-node",
     "lodash": "4.17.15",
     "lokijs": "1.5.8",
     "md5-file": "5.0.0",
